@@ -30,28 +30,31 @@ export async function transaction<T>(
   }
 }
 export async function migrate(pool: Pool, config: Config) {
-  const sql = await readFile(
-    fileURLToPath(new URL("../migrations/001_initial.sql", import.meta.url)),
-    "utf8",
-  );
   await transaction(pool, async (db) => {
     await db.query("SELECT pg_advisory_xact_lock(57369104)");
     await db.query(
       "CREATE TABLE IF NOT EXISTS schema_migrations(version text PRIMARY KEY,checksum text NOT NULL)",
     );
-    const digest = createHash("sha256").update(sql).digest("hex");
-    const existing = await db.query(
-      "SELECT checksum FROM schema_migrations WHERE version=$1",
-      ["001"],
-    );
-    if (existing.rows.length && existing.rows[0].checksum !== digest)
-      throw new Error("Migration 001 alterada após aplicação");
-    if (!existing.rows.length) {
-      await db.query(sql);
-      await db.query("INSERT INTO schema_migrations VALUES($1,$2)", [
-        "001",
-        digest,
-      ]);
+    for (const filename of ["001_initial.sql", "002_lookup_indexes.sql"]) {
+      const version = filename.split("_")[0];
+      const sql = await readFile(
+        fileURLToPath(new URL("../migrations/" + filename, import.meta.url)),
+        "utf8",
+      );
+      const digest = createHash("sha256").update(sql).digest("hex");
+      const existing = await db.query(
+        "SELECT checksum FROM schema_migrations WHERE version=$1",
+        [version],
+      );
+      if (existing.rows.length && existing.rows[0].checksum !== digest)
+        throw new Error("Migration " + version + " alterada após aplicação");
+      if (!existing.rows.length) {
+        await db.query(sql);
+        await db.query("INSERT INTO schema_migrations VALUES($1,$2)", [
+          version,
+          digest,
+        ]);
+      }
     }
     for (const p of [
       { id: "core", name: "Core", price: 4990, devices: 1, credits: 1000 },

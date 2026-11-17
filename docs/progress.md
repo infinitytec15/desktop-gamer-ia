@@ -77,3 +77,6 @@ Publicação: commit inicial ef4242c enviado ao GitHub infinitytec15/desktop-gam
 
 
 Verificação pública adicional: admin login OK, catálogo Core/Creator/Studio, cobrança desativada, download disponível, chave pública do desktop igual à do servidor e zero contas de cliente artificiais em produção. Burst de 100 leituras /api/public, concorrência 10, p95 172ms no ambiente observado (não certifica carga sustentada). API ampliada para 16 testes, incluindo falha determinística de checkout, recarga com preferência inicialmente não salva, bloqueio de segundo contrato pausado e estornos. CI anterior passou; runner Windows do commit acfb99a revelou colisão entre diretórios temporários por timestamp. Fixtures OBS/lib/workflow agora usam UUID e o teste de falha OBS verifica o erro esperado de SetStreamServiceSettings, preservando a exigência de rollback.
+
+
+Escalabilidade de leitura: migration 002 adiciona índices de pagamentos aprovados por assinatura, assinaturas/planos por conta, licenças/recargas por usuário e análises em andamento por carteira. Migrações sequenciais preservam checksum da 001 já aplicada, com lock transacional na inicialização para réplicas concorrentes.
