@@ -197,7 +197,7 @@ mod tests {
     #[test]
     fn execution_and_acceptance_need_current_verified_evidence() {
         let store = PreferenceStore::new(
-            std::env::temp_dir().join(format!("gf-work-{}", stamp().expect("id"))),
+            std::env::temp_dir().join(format!("gf-work-{}", uuid::Uuid::new_v4())),
         );
         store
             .record_plan(&crate::automation::OptimizationPlan::offline())

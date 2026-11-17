@@ -1,4 +1,4 @@
-import {reconcileTopup} from '../src/topups.js';
+import { reconcileTopup, topupCheckout } from "../src/topups.js";
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -13,7 +13,7 @@ import { database, migrate, transaction } from "../src/db.js";
 import { createApp } from "../src/app.js";
 import { createLicense, activate, deviceAuth } from "../src/license.js";
 import { grant, wallet, reserve, MICRO, settle } from "../src/credits.js";
-import { reconcileInvoice } from "../src/billing.js";
+import { reconcileInvoice, checkout } from "../src/billing.js";
 import { generatePlan } from "../src/planner.js";
 const enabled = !!process.env.TEST_DATABASE_URL;
 const integration = enabled ? test : test.skip;
@@ -107,8 +107,16 @@ integration(
       headers: { Cookie: adminCookie },
     });
     assert.equal(dashboard.status, 200);
-const results=await realFetch(origin+'/api/admin/users?q='+encodeURIComponent(email)+'&offset=0',{headers:{Cookie:adminCookie}});assert.equal(results.status,200);assert.equal((await results.json()).length,1);
-const invalid=await realFetch(origin+'/api/admin/users?offset=-1',{headers:{Cookie:adminCookie}});assert.equal(invalid.status,400);
+    const results = await realFetch(
+      origin + "/api/admin/users?q=" + encodeURIComponent(email) + "&offset=0",
+      { headers: { Cookie: adminCookie } },
+    );
+    assert.equal(results.status, 200);
+    assert.equal((await results.json()).length, 1);
+    const invalid = await realFetch(origin + "/api/admin/users?offset=-1", {
+      headers: { Cookie: adminCookie },
+    });
+    assert.equal(invalid.status, 400);
   },
 );
 integration(
@@ -401,4 +409,100 @@ integration(
   },
 );
 
-integration('topup grants once, validates merchant and reverses refunded credits',async()=>{const u=await user(),id=randomUUID(),preference='pref-'+randomUUID(),paymentId='pay-'+randomUUID();await pool.query("INSERT INTO credit_orders(id,user_id,package_id,credits,amount_cents,provider_id,status) VALUES($1,$2,'credits_4000',4000,13990,$3,'pending')",[id,u.id,preference]);let status='approved',collector=123;globalThis.fetch=async(input,init)=>{const url=String(input);if(url.includes('/v1/payments/'+paymentId))return Response.json({id:paymentId,external_reference:id,collector_id:collector,live_mode:false,currency_id:'BRL',transaction_amount:139.9,transaction_amount_refunded:status==='approved'?0:139.9,status,status_detail:'accredited',order:{id:'fixture-merchant'}});if(url.includes('/merchant_orders/fixture-merchant'))return Response.json({preference_id:preference,external_reference:id,payments:[{id:paymentId}]});return realFetch(input,init)};try{await Promise.all([reconcileTopup(pool,c,paymentId),reconcileTopup(pool,c,paymentId)]);assert.equal((await wallet(pool,'user:'+u.id)).balance,4000);collector=999;await assert.rejects(()=>reconcileTopup(pool,c,paymentId));assert.equal((await wallet(pool,'user:'+u.id)).balance,4000);collector=123;status='refunded';await reconcileTopup(pool,c,paymentId);assert.equal((await wallet(pool,'user:'+u.id)).balance,0)}finally{globalThis.fetch=realFetch}});
+integration(
+  "topup grants once, validates merchant and reverses refunded credits",
+  async () => {
+    const u = await user(),
+      id = randomUUID(),
+      preference = "pref-" + randomUUID(),
+      paymentId = "pay-" + randomUUID();
+    await pool.query(
+      "INSERT INTO credit_orders(id,user_id,package_id,credits,amount_cents,provider_id,status) VALUES($1,$2,'credits_4000',4000,13990,$3,'pending')",
+      [id, u.id, preference],
+    );
+    await pool.query("UPDATE credit_orders SET provider_id=NULL WHERE id=$1", [
+      id,
+    ]);
+    let status = "approved",
+      collector = 123;
+    globalThis.fetch = async (input, init) => {
+      const url = String(input);
+      if (url.includes("/v1/payments/" + paymentId))
+        return Response.json({
+          id: paymentId,
+          external_reference: id,
+          collector_id: collector,
+          live_mode: false,
+          currency_id: "BRL",
+          transaction_amount: 139.9,
+          transaction_amount_refunded: status === "approved" ? 0 : 139.9,
+          status,
+          status_detail: "accredited",
+          order: { id: "fixture-merchant" },
+        });
+      if (url.includes("/merchant_orders/fixture-merchant"))
+        return Response.json({
+          preference_id: preference,
+          external_reference: id,
+          payments: [{ id: paymentId }],
+        });
+      return realFetch(input, init);
+    };
+    try {
+      await Promise.all([
+        reconcileTopup(pool, c, paymentId),
+        reconcileTopup(pool, c, paymentId),
+      ]);
+      assert.equal((await wallet(pool, "user:" + u.id)).balance, 4000);
+      assert.equal(
+        (
+          await pool.query(
+            "SELECT provider_id FROM credit_orders WHERE id=$1",
+            [id],
+          )
+        ).rows[0].provider_id,
+        preference,
+      );
+      collector = 999;
+      await assert.rejects(() => reconcileTopup(pool, c, paymentId));
+      assert.equal((await wallet(pool, "user:" + u.id)).balance, 4000);
+      collector = 123;
+      status = "refunded";
+      await reconcileTopup(pool, c, paymentId);
+      assert.equal((await wallet(pool, "user:" + u.id)).balance, 0);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  },
+);
+
+integration(
+  "checkout deterministic failures allow retry and paused subscriptions block another contract",
+  async () => {
+    const u = await user();
+    globalThis.fetch = async (input, init) => {
+      if (String(input).includes("api.mercadopago.com"))
+        return Response.json({ error: "fixture" }, { status: 400 });
+      return realFetch(input, init);
+    };
+    try {
+      await assert.rejects(() => topupCheckout(pool, c, u.id, "credits_1000"));
+      assert.equal(
+        (
+          await pool.query(
+            "SELECT status FROM credit_orders WHERE user_id=$1",
+            [u.id],
+          )
+        ).rows[0].status,
+        "failed",
+      );
+      await pool.query(
+        "INSERT INTO subscriptions(id,user_id,plan_id,status,amount_cents,credits,interval_months) VALUES($1,$2,'core','paused',4990,1000,1)",
+        [randomUUID(), u.id],
+      );
+      await assert.rejects(() => checkout(pool, c, u.id, "core"), /Já existe/);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  },
+);

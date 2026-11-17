@@ -263,10 +263,7 @@ pub fn data_dir() -> PathBuf {
 mod tests {
     use super::*;
     fn store() -> PreferenceStore {
-        let n = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
+        let n = uuid::Uuid::new_v4();
         PreferenceStore::new(std::env::temp_dir().join(format!("gf-test-{n}")))
     }
 

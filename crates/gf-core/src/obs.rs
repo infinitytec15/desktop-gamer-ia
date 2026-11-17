@@ -639,7 +639,7 @@ mod tests {
     fn profile_apply_undo_and_secret_exclusion() {
         let (address, state, server) = fixture_server(2, false);
         let store = PreferenceStore::new(
-            std::env::temp_dir().join(format!("gf-obs-{}", stamp().expect("id"))),
+            std::env::temp_dir().join(format!("gf-obs-{}", uuid::Uuid::new_v4())),
         );
         let op = apply_connected(
             &store,
@@ -681,24 +681,28 @@ mod tests {
     fn profile_failure_restores_original() {
         let (address, state, server) = fixture_server(1, true);
         let store = PreferenceStore::new(
-            std::env::temp_dir().join(format!("gf-obs-{}", stamp().expect("id"))),
+            std::env::temp_dir().join(format!("gf-obs-{}", uuid::Uuid::new_v4())),
         );
-        assert!(apply_connected(
+        let failure = apply_connected(
             &store,
             StreamVideo {
                 width: 1280,
                 height: 720,
                 fps: 30,
-                bitrate: 3500
+                bitrate: 3500,
             },
             StreamTarget {
                 platform: "kick".into(),
-                server: "rtmps://fixture.example/app".into()
+                server: "rtmps://fixture.example/app".into(),
             },
             "fixture-secret".into(),
-            Obs::connect_at(address, None).expect("connect")
+            Obs::connect_at(address, None).expect("connect"),
         )
-        .is_err());
+        .expect_err("fixture must reject stream service");
+        assert!(
+            failure.to_string().contains("SetStreamServiceSettings"),
+            "{failure}"
+        );
         server.join().expect("server");
         assert_eq!(
             store.operations().expect("history")[0].status,

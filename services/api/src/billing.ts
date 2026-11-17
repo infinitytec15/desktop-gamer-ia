@@ -77,7 +77,7 @@ export async function checkout(
     ).rows[0];
     const existing = (
       await db.query(
-        "SELECT * FROM subscriptions WHERE user_id=$1 AND status IN ('creating','pending','authorized','active') ORDER BY created_at DESC LIMIT 1",
+        "SELECT * FROM subscriptions WHERE user_id=$1 AND status IN ('creating','pending','authorized','active','paused') ORDER BY created_at DESC LIMIT 1",
         [userId],
       )
     ).rows[0];
@@ -140,7 +140,7 @@ export async function checkout(
     )
       throw new HttpError(502, "Checkout não confirmado pelo Mercado Pago");
     await pool.query(
-      "UPDATE subscriptions SET provider_id=$2,checkout_url=$3,status='pending',updated_at=now() WHERE id=$1",
+      "UPDATE subscriptions SET provider_id=$2,checkout_url=$3,status=CASE WHEN status='creating' THEN 'pending' ELSE status END,updated_at=now() WHERE id=$1",
       [intent.id, providerId, url],
     );
     await audit(pool, userId, "billing.checkout_created", {
