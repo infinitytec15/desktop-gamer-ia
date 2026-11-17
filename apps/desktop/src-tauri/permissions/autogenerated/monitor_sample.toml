@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-monitor-sample"
+description = "Enables the monitor_sample command without any pre-configured scope."
+commands.allow = ["monitor_sample"]
+
+[[permission]]
+identifier = "deny-monitor-sample"
+description = "Denies the monitor_sample command without any pre-configured scope."
+commands.deny = ["monitor_sample"]

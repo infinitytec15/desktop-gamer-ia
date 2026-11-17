@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-apply-system"
+description = "Enables the apply_system command without any pre-configured scope."
+commands.allow = ["apply_system"]
+
+[[permission]]
+identifier = "deny-apply-system"
+description = "Denies the apply_system command without any pre-configured scope."
+commands.deny = ["apply_system"]

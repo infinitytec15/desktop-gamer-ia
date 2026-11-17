@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-advance-workflow"
+description = "Enables the advance_workflow command without any pre-configured scope."
+commands.allow = ["advance_workflow"]
+
+[[permission]]
+identifier = "deny-advance-workflow"
+description = "Denies the advance_workflow command without any pre-configured scope."
+commands.deny = ["advance_workflow"]

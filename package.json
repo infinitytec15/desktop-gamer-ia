@@ -1,0 +1,36 @@
+{
+  "name": "gameforge",
+  "private": true,
+  "version": "0.3.0",
+  "workspaces": [
+    "apps/desktop",
+    "apps/web",
+    "services/api"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @gameforge/desktop",
+    "build": "npm run build -w @gameforge/desktop",
+    "check": "npm run check -w @gameforge/desktop",
+    "test": "npm run test -w @gameforge/desktop",
+    "desktop": "npm run tauri -w @gameforge/desktop -- dev",
+    "e2e": "playwright test",
+    "package": "npm run tauri -w @gameforge/desktop -- build --debug --no-bundle",
+    "installer": "npm run tauri -w @gameforge/desktop -- build --bundles nsis",
+    "web:dev": "npm run dev -w @gameforge/web",
+    "web:build": "npm run build -w @gameforge/web",
+    "api:dev": "npm run dev -w @gameforge/api",
+    "api:build": "npm run build -w @gameforge/api",
+    "api:test": "npm run test -w @gameforge/api",
+    "start": "npm run start -w @gameforge/api",
+    "build:cloud": "npm run web:build && npm run api:build",
+    "installer:debug": "npm run tauri -w @gameforge/desktop -- build --debug --bundles nsis",
+    "e2e:web": "playwright test --config playwright.web.config.ts",
+    "cloud:sync-desktop": "node scripts/sync-desktop-target.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "prettier": "^3.10.1"
+  }
+}

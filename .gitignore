@@ -1,0 +1,17 @@
+node_modules/
+dist/
+target/
+.env
+*.local
+.impeccable/review/
+test-results/
+playwright-report/
+*.tsbuildinfo
+
+.railway/
+.env.*
+!.env.example
+*.pem
+*.pfx
+*.key
+*.log

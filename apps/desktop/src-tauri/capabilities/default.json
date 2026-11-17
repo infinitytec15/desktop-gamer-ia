@@ -1,0 +1,41 @@
+{
+  "identifier": "default",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "allow-diagnose",
+    "allow-apply-preferences",
+    "allow-get-snapshot",
+    "allow-restore-last",
+    "allow-detect-games",
+    "allow-measure-network",
+    "allow-obs-status",
+    "allow-monitor-sample",
+    "allow-list-snapshots",
+    "allow-restore-snapshot",
+    "allow-save-secret",
+    "allow-secret-status",
+    "allow-remove-secret",
+    "allow-preview-ai",
+    "allow-generate-plan",
+    "allow-offline-plan",
+    "allow-prepare-system",
+    "allow-apply-system",
+    "allow-cancel-system",
+    "allow-operation-history",
+    "allow-undo-operation",
+    "allow-obs-connect",
+    "allow-obs-configure",
+    "allow-open-obs",
+    "notification:default",
+    "allow-list-programs",
+    "allow-create-workflow",
+    "allow-advance-workflow",
+    "allow-obs-auto-connect",
+    "allow-license-status",
+    "allow-license-activate",
+    "allow-license-deactivate"
+  ]
+}

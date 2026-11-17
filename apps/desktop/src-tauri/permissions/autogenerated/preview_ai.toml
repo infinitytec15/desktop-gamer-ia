@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-preview-ai"
+description = "Enables the preview_ai command without any pre-configured scope."
+commands.allow = ["preview_ai"]
+
+[[permission]]
+identifier = "deny-preview-ai"
+description = "Denies the preview_ai command without any pre-configured scope."
+commands.deny = ["preview_ai"]
