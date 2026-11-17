@@ -71,3 +71,6 @@ Evidências locais: npm run build e build:cloud passaram; npm test (2), E2E desk
 Railway: projeto gameforge-ai criado no workspace Intra Pay com Postgres, gameforge-web, domínio e ENV internas geradas privadamente. Pagamentos continuam desativados e provedores vazios para o operador preencher/homologar. Publicação e URL saudável devem ser verificadas antes de declarar deploy concluído.
 
 Pendências comerciais/operacionais: homologar gateway/IA com credenciais adequadas; completar identificação da empresa/atendimento, recuperação de senha/verificação de e-mail, backups/alertas e teste sustentado de carga. Não houve cobrança real. A entrega Cloud não conclui Discord bot, controle genérico de PC, OAuth, multistream, cenas completas ou otimização macOS do SDD.
+
+
+Publicação: commit inicial ef4242c enviado ao GitHub infinitytec15/desktop-gamer-ia. Railway declarou SUCCESS e GET /api/health retornou ok no domínio público. Instalador e SHA256SUMS publicados no prerelease v0.3.0; hash SHA256 f850799e91e538eb4336064a8cf9d2051aaeb08b1ff40326935d92435719647d. URL de download cadastrada no serviço. Configuração migrada para IaC atual (.railway/railway.ts) após revisar plano sem destruição, preservando todas as ENV e PostgreSQL. CLI atual advertiu cutoff do formato legado para 01/12/2026; arquivo antigo removido depois da migração/aplicação.

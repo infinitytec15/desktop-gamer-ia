@@ -6,7 +6,7 @@ Aplicativo Windows para diagnosticar o PC, planejar ajustes com Claude Opus 5.5 
 
 - `apps/web`: React 19, Vite, Three.js e GSAP; landing, cadastro, login, planos, assinatura, créditos, chaves, dispositivos e download.
 - `services/api`: Express 5, PostgreSQL, sessões HttpOnly, login admin por ENV, catálogo editável, cofre de provedores AES-GCM, webhook assinado, fila durável e proxy IA com reservas/acerto de créditos.
-- `Dockerfile` e `railway.toml`: Node 24, site e API na mesma origem, PostgreSQL separado, health check e migração transacional.
+- `Dockerfile` e `.railway/railway.ts`: Node 24, site e API na mesma origem, PostgreSQL separado, health check e migração transacional.
 
 Consulte [operação e variáveis do Railway](docs/CLOUD-RAILWAY.md) e [custos e política de créditos](docs/PRECOS-E-CREDITOS.md). Cobrança inicia desabilitada até configurar e homologar Mercado Pago. Não houve transações reais nos testes.
 

@@ -1,5 +1,7 @@
 # GameForge Cloud 0.3
 
+A infraestrutura do serviço web é declarada em `.railway/railway.ts`, com valores de variáveis preservados no Railway e sem gerenciar o ciclo de vida do PostgreSQL. O formato legado `railway.toml` foi migrado: a documentação atual informa desativação em 01/12/2026. Mudanças de infraestrutura usam `railway config plan` e depois `railway config apply --yes`, sempre revisando o plano. Adicione nomes de novas variáveis como `preserve()` antes de um apply; não inclua os segredos no arquivo. A fonte GitHub faz autodeploy de código em main, mas mudanças no IaC requerem apply pelo CLI.
+
 O deploy usa um serviço Node 24 com Express, site React/Vite e PostgreSQL. Não requer disco persistente no serviço web. Sessões, licenças, carteira e fila de pagamentos são compartilhadas no banco.
 
 ## Projeto e acessos
@@ -84,3 +86,16 @@ Os textos de termos/privacidade descrevem a operação beta, mas ainda exigem id
 - [Webhooks Mercado Pago](https://www.mercadopago.com.br/developers/pt/docs/subscriptions/additional-content/your-integrations/notifications/webhooks).
 - [Checkout Pro](https://www.mercadopago.com.br/developers/pt/reference/online-payments/checkout-pro-preferences/create-preference/post).
 - [Health checks Railway](https://docs.railway.com/deployments/healthchecks).
+
+
+### CLI de infraestrutura no Windows
+
+O SDK consulta o binário nativo para conferir a versão. Se ocorrer erro de versão apesar do CLI atualizado, acrescente o diretório nativo ao PATH somente para esta sessão:
+
+```powershell
+$taskRailwayBin = Join-Path (npm root -g) "@railway/cli/bin"
+$env:PATH = "$taskRailwayBin;" + $env:PATH
+railway config plan
+```
+
+[Documentação oficial IaC](https://docs.railway.com/infrastructure-as-code). O plano aplicado nesta entrega preservou variáveis, GitHub e Postgres, modificando somente build, health check e política de reinício.
