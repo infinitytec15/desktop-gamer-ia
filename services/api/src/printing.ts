@@ -57,7 +57,11 @@ export async function generatePrinting(
     b.allow_fallback,
     { brief: b.brief, geometry: b.geometry },
     printingTask(b.brief),
-    b,
+    {
+      ...b,
+      legacy_anthropic_only:
+        !Object.hasOwn(body as object, "mode") && !b.allow_fallback,
+    },
   );
 }
 export function printingTask(brief: Parameters<typeof localPlan>[0]): AiTask {

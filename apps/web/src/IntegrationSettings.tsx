@@ -244,6 +244,21 @@ export function RoutingSettings({ data, mutate, busy }: Props) {
         <button className="button primary small" disabled={busy}>
           Salvar roteamento
         </button>
+        {data.routing_can_restore && (
+          <button
+            type="button"
+            className="button secondary small"
+            disabled={busy}
+            onClick={() =>
+              void mutate(
+                () => api("/admin/ai/routing/restore", {}),
+                "Roteamento anterior restaurado",
+              )
+            }
+          >
+            Restaurar roteamento anterior
+          </button>
+        )}
       </form>
     </section>
   );

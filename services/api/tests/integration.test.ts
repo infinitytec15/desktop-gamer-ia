@@ -14,10 +14,15 @@ import { createApp } from "../src/app.js";
 import { createLicense, activate, deviceAuth } from "../src/license.js";
 import { grant, wallet, reserve, MICRO, settle } from "../src/credits.js";
 import { reconcileInvoice, checkout } from "../src/billing.js";
-import { generatePlan, runStructured, systemTask } from "../src/planner.js";
+import {
+  generatePlan,
+  runStructured,
+  systemTask,
+  availableModels,
+} from "../src/planner.js";
 import { estimate } from "../src/estimates.js";
 import { paymentConfig } from "../src/integrations.js";
-import { decrypt } from "../src/security.js";
+import { decrypt, encrypt } from "../src/security.js";
 import { generatePrinting, accountActor } from "../src/printing.js";
 import { briefSchema, localPlan } from "@gameforge/printing";
 const enabled = !!process.env.TEST_DATABASE_URL;
@@ -1056,5 +1061,111 @@ integration(
       ).status,
       404,
     );
+  },
+);
+
+integration(
+  "OpenAI-only routing restores its snapshot and protects legacy provider opt-out",
+  async () => {
+    const admin = await post("/auth/admin", {
+      email: c.adminEmail,
+      password: c.adminPassword,
+    });
+    const cookie = admin.headers.get("set-cookie")!.split(";")[0];
+    const before = await (
+      await realFetch(origin + "/api/admin/config", {
+        headers: { Cookie: cookie },
+      })
+    ).json();
+    const routing = {
+      economy: { primary: "gpt-6-luna", fallback: "gpt-6.1-terra" },
+      balanced: { primary: "gpt-6.1-terra", fallback: "gpt-6.1-sol" },
+      advanced: { primary: "gpt-6.1-sol", fallback: null },
+    };
+    assert.equal(
+      (await post("/admin/ai/routing", routing, cookie)).status,
+      200,
+    );
+    try {
+      const context = {
+        goal: "Legacy provider consent fixture",
+        os: "Fixture",
+        architecture: "x86_64",
+        cpu: "Fixture",
+        cores: 1,
+        ram_gb: 8,
+        used_ram_gb: 1,
+        cpu_usage: 0,
+        disks: [],
+      };
+      await assert.rejects(
+        () =>
+          generatePlan(
+            pool,
+            c,
+            { id: randomUUID() },
+            { id: randomUUID(), features: ["ai_plans"], user_id: null },
+            { request_id: randomUUID(), allow_fallback: false, context },
+          ),
+        /roteamento mudou/,
+      );
+      const current = await (
+        await realFetch(origin + "/api/admin/config", {
+          headers: { Cookie: cookie },
+        })
+      ).json();
+      assert.equal(current.routing.advanced.primary, "gpt-6.1-sol");
+      assert.equal(current.routing_can_restore, true);
+    } finally {
+      assert.equal(
+        (await post("/admin/ai/routing/restore", {}, cookie)).status,
+        200,
+      );
+    }
+    const after = await (
+      await realFetch(origin + "/api/admin/config", {
+        headers: { Cookie: cookie },
+      })
+    ).json();
+    assert.deepEqual(after.routing, before.routing);
+  },
+);
+
+integration(
+  "legacy provider secrets are resealed with context binding before external use",
+  async () => {
+    const secret = "fixture-legacy-provider-key-123456";
+    await pool.query(
+      "INSERT INTO provider_credentials(provider,encrypted_value,last_four) VALUES('openai',$1,'fake') ON CONFLICT(provider) DO UPDATE SET encrypted_value=excluded.encrypted_value,last_four='fake'",
+      [encrypt(secret, c.encryptionKey)],
+    );
+    globalThis.fetch = async (input, init) => {
+      if (String(input) === "https://api.openai.com/v1/models")
+        return Response.json({ data: [{ id: "gpt-6.1-sol" }] });
+      return realFetch(input, init);
+    };
+    try {
+      const result = await availableModels(pool, c, "openai");
+      assert.deepEqual(result.models, ["gpt-6.1-sol"]);
+      const value = (
+        await pool.query(
+          "SELECT encrypted_value,last_four FROM provider_credentials WHERE provider='openai'",
+        )
+      ).rows[0];
+      assert.ok(value.encrypted_value.startsWith("v2."));
+      assert.equal(value.last_four, "****");
+      assert.equal(
+        decrypt(value.encrypted_value, c.encryptionKey, "provider:openai"),
+        secret,
+      );
+      assert.throws(() =>
+        decrypt(value.encrypted_value, c.encryptionKey, "provider:anthropic"),
+      );
+    } finally {
+      globalThis.fetch = realFetch;
+      await pool.query(
+        "DELETE FROM provider_credentials WHERE provider='openai'",
+      );
+    }
   },
 );

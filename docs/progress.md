@@ -128,3 +128,21 @@ Verificação parcial: 50 verificações Rust, Clippy -D warnings, cargo check T
 
 
 Bateria local final 0.5: 101 verificações passaram (50 Rust, 21 API, 11 impressão, 2 Vitest, 10 E2E desktop e 7 E2E web). Inclui restauração de chave de provedor v2/AAD e ausência de fragmentos em GET. O teste de orçamento foi corrigido para usar origem de concessão única ao repetir em banco persistente; a proteção de carteira divergente permaneceu ativa. Builds desktop/cloud, Clippy e checagem Tauri passaram. NSIS release 4,44 MiB gerado; SHA256 9d71a2b96ca70907299a1f4ea1338fd8a3858e0366da6e91627a0890043cde46. Sem certificado fornecido, assinatura é NotSigned; UAC é solicitado pelo modo perMachine. Não foi instalado nesta máquina.
+
+
+Publicação 0.5: commit bb9369a enviado, Railway 1758bcd2-7037-41df-bf42-dd955b1748a4 SUCCESS; instalador e SHA256SUMS publicados no prerelease v0.5.0. O manifesto PE do instalador foi lido sem executar e contém requestedExecutionLevel=requireAdministrator. Assinatura consultada: NotSigned, conforme ausência de certificado informada pelo usuário. UAC está preparado; não alegar remoção do alerta SmartScreen.
+
+Diagnóstico real Anthropic: consulta /v1/models com a credencial de produção encontrou Opus 5.5, Sonnet 5.5 e Haiku 5.5. A chamada de teste do Opus foi recusada HTTP 400 por saldo/faturamento insuficiente; não é identificador de modelo inexistente. Resposta sanitizada agora mostra essa causa, com zero tokens/custo informado nessa recusa. Foi solicitado ao operador adicionar saldo na conta da API ou manter OpenAI por enquanto; nenhum pagamento ao provedor foi realizado pelo agente.
+
+Homologação real do proxy econômico: dois cenários explicitamente sintéticos/controlados de contrato (FDM e resina, sem impressora física conectada) executaram GPT-6 Luna low em produção. Respostas passaram na validação numérica compartilhada. Consumo FDM 0,2508 crédito (reserva 5,47925); resina 0,2138 (reserva 5,506), total 0,4646 crédito = US$ 0,0004646 tabelado. Replay do mesmo ID devolveu o mesmo resultado validado. Assinatura Ed25519/issuer/janela da licença testados com chave pública; dispositivo temporário desativado, chave revogada e concessão de teste retirada. Zero contas de cliente e zero pagamentos criados. Não se trata de homologação de impressão física.
+
+Verificação pública: três E2E de impressão/estimativa passaram no domínio publicado; health OK; acesso anônimo ao admin e mutation cross-origin com sessão admin negados; cookie Secure/HttpOnly; API sem cache; nenhum segredo do ambiente nem fragmentos de chaves retornados pelo admin config. Mercado Pago permanece desabilitado e sem token/webhook/vendedor; campos estão funcionais, mas credenciais e homologação de cobrança real continuam pendentes. Limites de orçamento passam a identificar conta/dispositivo autenticado, evitando compartilhar cota entre vários clientes atrás do mesmo NAT; visitantes anônimos continuam limitados por IP.
+
+
+Operador escolheu usar apenas OpenAI por enquanto. Preparada configuração Luna → Terra no Econômico, Terra → Sol no Equilibrado e Sol sem fallback no Avançado. Roteamento passa a ter snapshot cifrado/restauração no admin. Clientes antigos que recusaram fallback OpenAI não têm seus dados redirecionados silenciosamente: recebem pedido de atualização/revisão se o principal deixar de ser Anthropic. Nova verificação cobre esse opt-out e a restauração da configuração.
+
+
+Cofre legado: ao usar uma credencial AES-GCM antiga, o servidor a recifra com AAD do provedor em transação, com snapshot cifrado e comparação do estado anterior. A chave não sai do servidor e não é revelada ao operador para migrar. Teste verifica recifra, chave preservada e rejeição ao trocar o contexto.
+
+
+As verificações adicionais de opt-out legado/restauração de roteamento e recifra de segredo legado passaram; API soma 23 testes, total local 103. Build cloud/API final passou. CI de bb9369a passou em cloud, frontend, Rust Windows e Rust macOS. Guard de GF_REQUIRE_SIGNING foi executado sem certificado e bloqueou o build conforme esperado, sem instalar/alterar o Windows. Auditoria de dependências de produção retornou zero vulnerabilidades; alertas de desenvolvimento continuam registrados separadamente.

@@ -40,6 +40,7 @@ export type AiOptions = {
   mode?: "economy" | "balanced" | "advanced";
   effort?: "low" | "medium" | "high";
   quote_hash?: string;
+  legacy_anthropic_only?: boolean;
 };
 const pair = z.strictObject({
   primary: z.enum(Object.keys(MODELS) as [ModelId, ...ModelId[]]),
@@ -93,6 +94,14 @@ export async function routeFor(
   const mode = options.mode || "advanced",
     effort = options.effort || "low";
   const selected = (await routingSettings(pool))[mode];
+  if (
+    options.legacy_anthropic_only &&
+    MODELS[selected.primary].provider !== "anthropic"
+  )
+    throw new HttpError(
+      409,
+      "O roteamento mudou. Atualize o desktop para 0.5 e revise o modelo e a estimativa antes de enviar dados.",
+    );
   const saved = (
     await pool.query("SELECT provider FROM provider_credentials")
   ).rows.map((r) => r.provider);

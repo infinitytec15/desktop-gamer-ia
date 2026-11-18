@@ -405,12 +405,18 @@ export function createApp(pool: Pool, c: Config) {
   });
 
   app.post("/api/ai/estimate", async (req, res) => {
-    await rateLimit(pool, c, "ai-quote:" + req.ip, 60, 60);
+    await rateLimit(
+      pool,
+      c,
+      "ai-quote:" + (req.auth?.userId || "ip:" + req.ip),
+      60,
+      60,
+    );
     res.json(await estimate(pool, req.body));
   });
   app.post("/api/desktop/ai/estimate", async (req, res) => {
-    await deviceAuth(pool, c, bearer(req));
-    await rateLimit(pool, c, "desktop-quote:" + req.ip, 60, 60);
+    const { device } = await deviceAuth(pool, c, bearer(req));
+    await rateLimit(pool, c, "desktop-quote:" + device.id, 60, 60);
     res.json(await estimate(pool, req.body));
   });
   app.post("/api/account/printing/ai", requireUser, async (req, res) => {
@@ -818,7 +824,9 @@ export function createApp(pool: Pool, c: Config) {
 
   app.get("/api/admin/config", async (_req, res) => {
     const saved = (
-      await pool.query("SELECT provider,updated_at FROM provider_credentials")
+      await pool.query(
+        "SELECT provider,updated_at,(left(encrypted_value,3)='v2.') context_bound FROM provider_credentials",
+      )
     ).rows;
     const tests = (
       await pool.query(
@@ -836,11 +844,18 @@ export function createApp(pool: Pool, c: Config) {
       billing_enabled: billingReady(await paymentConfig(pool, c)),
       mercadopago: await paymentStatus(pool, c),
       routing: await routingSettings(pool),
+      routing_can_restore: !!(
+        await pool.query(
+          "SELECT id FROM credential_history WHERE name='ai-routing' LIMIT 1",
+        )
+      ).rows.length,
       ai_models: MODELS,
       download_url: c.downloadUrl,
       providers: ["anthropic", "openai"].map((provider) => ({
         provider,
         stored: saved.some((s) => s.provider === provider),
+        context_bound:
+          saved.find((s) => s.provider === provider)?.context_bound || false,
         model_check:
           modelChecks.find((r) => r.metadata.provider === provider)?.metadata ||
           null,
@@ -898,11 +913,53 @@ export function createApp(pool: Pool, c: Config) {
   });
   app.post("/api/admin/ai/routing", async (req, res) => {
     const value = routingSchema.parse(req.body);
-    await pool.query(
-      "INSERT INTO ai_routing_settings(id,config) VALUES(true,$1) ON CONFLICT(id) DO UPDATE SET config=excluded.config,updated_at=now()",
-      [JSON.stringify(value)],
-    );
+    await transaction(pool, async (db) => {
+      await db.query("SELECT pg_advisory_xact_lock(57369107)");
+      const old = (
+        await db.query(
+          "SELECT config FROM ai_routing_settings WHERE id=true FOR UPDATE",
+        )
+      ).rows[0];
+      await db.query(
+        "INSERT INTO credential_history(name,encrypted_before) VALUES('ai-routing',$1)",
+        [
+          old
+            ? encrypt(JSON.stringify(old.config), c.encryptionKey, "routing:ai")
+            : null,
+        ],
+      );
+      await db.query(
+        "INSERT INTO ai_routing_settings(id,config) VALUES(true,$1) ON CONFLICT(id) DO UPDATE SET config=excluded.config,updated_at=now()",
+        [JSON.stringify(value)],
+      );
+    });
     await audit(pool, "admin", "ai.routing_updated", value);
+    res.json({ ok: true });
+  });
+  app.post("/api/admin/ai/routing/restore", async (_req, res) => {
+    await transaction(pool, async (db) => {
+      await db.query("SELECT pg_advisory_xact_lock(57369107)");
+      const old = (
+        await db.query(
+          "SELECT id,encrypted_before FROM credential_history WHERE name='ai-routing' ORDER BY id DESC LIMIT 1 FOR UPDATE",
+        )
+      ).rows[0];
+      if (!old)
+        throw new HttpError(404, "Não há roteamento anterior para restaurar");
+      if (old.encrypted_before) {
+        const value = routingSchema.parse(
+          JSON.parse(
+            decrypt(old.encrypted_before, c.encryptionKey, "routing:ai"),
+          ),
+        );
+        await db.query(
+          "INSERT INTO ai_routing_settings(id,config) VALUES(true,$1) ON CONFLICT(id) DO UPDATE SET config=excluded.config,updated_at=now()",
+          [JSON.stringify(value)],
+        );
+      } else await db.query("DELETE FROM ai_routing_settings WHERE id=true");
+      await db.query("DELETE FROM credential_history WHERE id=$1", [old.id]);
+    });
+    await audit(pool, "admin", "ai.routing_restored");
     res.json({ ok: true });
   });
   app.post("/api/admin/providers/:provider/test", async (req, res) => {

@@ -11,7 +11,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { Pool } from "pg";
 import type { Config } from "./config.js";
-import { decrypt } from "./security.js";
+import { decrypt, encrypt } from "./security.js";
 import { transaction } from "./db.js";
 import { HttpError } from "./errors.js";
 import { reserve, settle } from "./credits.js";
@@ -114,6 +114,27 @@ async function providerKey(pool: Pool, c: Config, provider: string) {
       ];
   if (!key)
     throw new HttpError(503, "Provedor " + provider + " ainda não configurado");
+  if (row && !row.encrypted_value.startsWith("v2.")) {
+    await transaction(pool, async (db) => {
+      await db.query("SELECT pg_advisory_xact_lock(57369106)");
+      const current = (
+        await db.query(
+          "SELECT encrypted_value FROM provider_credentials WHERE provider=$1 FOR UPDATE",
+          [provider],
+        )
+      ).rows[0];
+      if (current?.encrypted_value === row.encrypted_value) {
+        await db.query(
+          "INSERT INTO credential_history(name,encrypted_before) VALUES($1,$2)",
+          ["provider:" + provider, row.encrypted_value],
+        );
+        await db.query(
+          "UPDATE provider_credentials SET encrypted_value=$2,last_four='****',updated_at=now() WHERE provider=$1",
+          [provider, encrypt(key, c.encryptionKey, "provider:" + provider)],
+        );
+      }
+    });
+  }
   return key;
 }
 export async function availableModels(
@@ -485,7 +506,11 @@ export async function generatePlan(
     b.allow_fallback,
     b.context,
     systemTask,
-    b,
+    {
+      ...b,
+      legacy_anthropic_only:
+        !Object.hasOwn(body as object, "mode") && !b.allow_fallback,
+    },
   );
 }
 export async function runStructured(
