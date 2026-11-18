@@ -7,7 +7,7 @@ import { HttpError } from "./errors.js";
 export async function entitlement(db: Pool | PoolClient, licenseId: string) {
   const result = await db.query(
     `SELECT l.*,p.name plan_name,p.max_devices,p.ai_quota,p.features,u.status user_status,
-CASE WHEN l.source='manual' THEN l.expires_at ELSE (SELECT MAX(pay.period_end) FROM subscriptions s JOIN payments pay ON pay.subscription_id=s.id WHERE s.user_id=l.user_id AND s.plan_id=l.plan_id AND pay.status='approved' AND pay.period_start<=now() AND pay.period_end>now()) END valid_until
+CASE WHEN l.manual_subscription_id IS NOT NULL THEN (SELECT LEAST(l.expires_at,m.ends_at) FROM manual_subscriptions m WHERE m.id=l.manual_subscription_id AND m.status='active' AND m.ends_at>now()) WHEN l.source='manual' THEN l.expires_at ELSE (SELECT MAX(pay.period_end) FROM subscriptions s JOIN payments pay ON pay.subscription_id=s.id WHERE s.user_id=l.user_id AND s.plan_id=l.plan_id AND pay.status='approved' AND pay.period_start<=now() AND pay.period_end>now()) END valid_until
 FROM licenses l JOIN plans p ON p.id=l.plan_id LEFT JOIN users u ON u.id=l.user_id WHERE l.id=$1`,
     [licenseId],
   );
@@ -15,7 +15,7 @@ FROM licenses l JOIN plans p ON p.id=l.plan_id LEFT JOIN users u ON u.id=l.user_
   if (
     !row ||
     row.revoked_at ||
-    row.user_status === "blocked" ||
+    (row.user_status && row.user_status !== "active") ||
     !row.valid_until ||
     new Date(row.valid_until) <= new Date()
   )
@@ -26,6 +26,14 @@ FROM licenses l JOIN plans p ON p.id=l.plan_id LEFT JOIN users u ON u.id=l.user_
   return row;
 }
 export async function paidPlan(pool: Pool | PoolClient, userId: string) {
+  const manual = (
+    await pool.query(
+      "SELECT m.*,m.ends_at paid_until,m.ends_at valid_until,p.name plan_name,p.max_devices,p.ai_quota,p.features,'manual' source,0 amount_cents,0 credits,1 interval_months FROM manual_subscriptions m JOIN plans p ON p.id=m.plan_id WHERE m.user_id=$1 AND m.status='active' AND m.ends_at>now() ORDER BY m.created_at DESC LIMIT 1",
+      [userId],
+    )
+  ).rows[0];
+  if (manual) return manual;
+
   const result = await pool.query(
     `SELECT s.*,p.name plan_name,p.max_devices,p.ai_quota,p.features FROM subscriptions s JOIN plans p ON p.id=s.plan_id WHERE s.user_id=$1 AND EXISTS(SELECT 1 FROM payments pay WHERE pay.subscription_id=s.id AND pay.status='approved' AND pay.period_start<=now() AND pay.period_end>now()) ORDER BY s.created_at DESC LIMIT 1`,
     [userId],
@@ -45,6 +53,8 @@ export async function createLicense(
 ) {
   const key = "GF_" + secretToken(),
     id = randomUUID();
+  let manualId: string | null = null;
+  let manualUntil: Date | null = null;
   await transaction(pool, async (db) => {
     if (input.userId)
       await db.query("SELECT id FROM users WHERE id=$1 FOR UPDATE", [
@@ -57,6 +67,23 @@ export async function createLicense(
           403,
           "Pagamento confirmado necessário para criar sua chave",
         );
+      if (
+        (
+          await db.query(
+            "SELECT id FROM licenses WHERE user_id=$1 AND plan_id=$2 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>now()) AND (source='subscription' OR manual_subscription_id IS NOT NULL) LIMIT 1",
+            [input.userId, input.planId],
+          )
+        ).rows.length
+      )
+        throw new HttpError(
+          409,
+          "Já existe uma chave ativa deste plano. Revogue a anterior antes de gerar outra.",
+        );
+      if (plan.source === "manual") {
+        manualId = plan.id;
+        manualUntil = new Date(plan.ends_at);
+        input = { ...input, source: "manual" };
+      }
     }
     const p = await db.query(
       "SELECT id FROM plans WHERE id=$1 AND active=true",
@@ -64,7 +91,7 @@ export async function createLicense(
     );
     if (!p.rows.length) throw new HttpError(400, "Plano indisponível");
     await db.query(
-      "INSERT INTO licenses(id,user_id,plan_id,key_hash,key_prefix,source,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7)",
+      "INSERT INTO licenses(id,user_id,plan_id,key_hash,key_prefix,source,expires_at,manual_subscription_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
       [
         id,
         input.userId,
@@ -72,9 +99,11 @@ export async function createLicense(
         hashToken(key, c.licensePepper),
         key.slice(0, 11),
         input.source,
-        input.source === "manual"
-          ? new Date(Date.now() + (input.days || 30) * 86400000)
-          : null,
+        manualUntil ||
+          (input.source === "manual"
+            ? new Date(Date.now() + (input.days || 30) * 86400000)
+            : null),
+        manualId,
       ],
     );
   });

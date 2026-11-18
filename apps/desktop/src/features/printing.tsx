@@ -12,6 +12,7 @@ async function generateAi(input: PrintingAiInput) {
     );
   return invoke("printing_ai", { input });
 }
+const estimateAi = (input: unknown) => invoke("estimate_ai", { input });
 const nativeSave: SaveArtifact = async (name, bytes) => {
   let binary = "";
   for (let offset = 0; offset < bytes.length; offset += 32768)
@@ -25,6 +26,7 @@ export default function PrintingPage() {
   return (
     <PrintWorkbench
       generateAi={generateAi}
+      estimateAi={isTauri() ? estimateAi : undefined}
       saveArtifact={isTauri() ? nativeSave : undefined}
     />
   );

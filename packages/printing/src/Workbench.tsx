@@ -1,3 +1,4 @@
+import { AiControls, useAiQuote, type AiChoice } from "./AiControls.js";
 import { printerCatalog } from "./printers.js";
 import {
   useId,
@@ -216,6 +217,9 @@ function display(v: unknown) {
 export type PrintingAiInput = {
   request_id: string;
   allow_fallback: boolean;
+  mode?: AiChoice["mode"];
+  effort?: AiChoice["effort"];
+  quote_hash?: string;
   brief: PrintBrief;
   geometry: Geometry | null;
 };
@@ -237,10 +241,12 @@ async function browserSave(name: string, bytes: Uint8Array) {
 }
 export function PrintWorkbench({
   generateAi,
+  estimateAi,
   saveArtifact = browserSave,
   aiHint = "O planejamento com IA usa a licença e o saldo de créditos da sua conta.",
 }: {
   generateAi?: (input: PrintingAiInput) => Promise<unknown>;
+  estimateAi?: (input: any) => Promise<unknown>;
   saveArtifact?: SaveArtifact;
   aiHint?: string;
 }) {
@@ -282,6 +288,24 @@ export function PrintWorkbench({
   const fits =
     !size || size.every((n, i) => n <= draft.build_volume[i] + 0.001);
   const selected = slicer(draft.slicer);
+  const [choice, setChoice] = useState<AiChoice>({
+    mode: "economy",
+    effort: "low",
+  });
+  let quoteInput: unknown = null;
+  try {
+    quoteInput = {
+      task: "printing",
+      brief: makeBrief(draft),
+      geometry,
+      allow_fallback: fallback,
+      ...choice,
+    };
+  } catch {
+    /* Wait for a valid reviewed brief. */
+  }
+  const aiBudget = useAiQuote(estimateAi, quoteInput, consent);
+
   function invalidate() {
     setPlan(null);
     setConsent(false);
@@ -411,6 +435,8 @@ export function PrintWorkbench({
       setBusy(true);
       let result = localPlan(b);
       if (ai) {
+        if (!aiBudget.quote)
+          throw new Error("Aguarde a estimativa antes de enviar.");
         if (!generateAi)
           throw new Error(
             "Entre na sua conta com licença válida para usar IA. O planejamento local está disponível.",
@@ -420,6 +446,8 @@ export function PrintWorkbench({
           allow_fallback: fallback,
           brief: b,
           geometry,
+          ...choice,
+          quote_hash: aiBudget.quote.quote_hash,
         });
         if (!response || typeof response !== "object")
           throw new Error("Resposta inválida");
@@ -436,6 +464,14 @@ export function PrintWorkbench({
           source: value.source,
           model: value.model,
           warnings: Array.isArray(value.warnings) ? value.warnings : [],
+          credits_used:
+            typeof value.credits_used === "number"
+              ? value.credits_used
+              : undefined,
+          credits_reserved:
+            typeof value.credits_reserved === "number"
+              ? value.credits_reserved
+              : undefined,
         };
       }
       setBrief(b);
@@ -981,9 +1017,19 @@ export function PrintWorkbench({
               checked={fallback}
               onChange={(e) => setFallback(e.target.checked)}
             />
-            Permitir fallback OpenAI se o Claude falhar (também pode consumir
-            créditos).
+            Permitir fallback para o segundo modelo do modo escolhido (também
+            pode consumir créditos).
           </label>
+          <AiControls
+            value={choice}
+            onChange={(value) => {
+              setChoice(value);
+              setPlan(null);
+              setReviewed(false);
+            }}
+            {...aiBudget}
+            disabled={busy}
+          />
           <div className="print-actions">
             <button
               className="print-button secondary"
@@ -994,7 +1040,7 @@ export function PrintWorkbench({
             </button>
             <button
               className="print-button primary"
-              disabled={busy || !consent}
+              disabled={busy || !consent || !aiBudget.quote || aiBudget.loading}
               onClick={() => void generate(true)}
             >
               Analisar com IA
@@ -1011,7 +1057,14 @@ export function PrintWorkbench({
               <p>
                 {plan.source === "local"
                   ? "Regras locais · sem consumo de IA"
-                  : plan.source + " · " + plan.model}
+                  : plan.source +
+                    " · " +
+                    plan.model +
+                    (plan.credits_used === undefined
+                      ? ""
+                      : " · " +
+                        numeric(plan.credits_used) +
+                        " créditos usados")}
               </p>
             </div>
             <span className="print-review-state">Aguardando seu aceite</span>

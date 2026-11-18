@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-estimate-ai"
+description = "Enables the estimate_ai command without any pre-configured scope."
+commands.allow = ["estimate_ai"]
+
+[[permission]]
+identifier = "deny-estimate-ai"
+description = "Denies the estimate_ai command without any pre-configured scope."
+commands.deny = ["estimate_ai"]

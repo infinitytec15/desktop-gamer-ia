@@ -1,3 +1,12 @@
+import {
+  MODELS,
+  routeFor,
+  budget,
+  outputBudget,
+  aiOptions,
+  type AiOptions,
+  type ModelId,
+} from "./routing.js";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { Pool } from "pg";
@@ -36,7 +45,7 @@ const plan = z.strictObject({
   video,
 });
 
-const context = z.strictObject({
+export const contextSchema = z.strictObject({
   goal: z.string().max(500),
   os: z.string().max(100),
   architecture: z.string().max(40),
@@ -99,13 +108,52 @@ async function providerKey(pool: Pool, c: Config, provider: string) {
     )
   ).rows[0];
   const key = row
-    ? decrypt(row.encrypted_value, c.encryptionKey)
+    ? decrypt(row.encrypted_value, c.encryptionKey, "provider:" + provider)
     : process.env[
         provider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY"
       ];
   if (!key)
     throw new HttpError(503, "Provedor " + provider + " ainda não configurado");
   return key;
+}
+export async function availableModels(
+  pool: Pool,
+  c: Config,
+  provider: "anthropic" | "openai",
+) {
+  const key = await providerKey(pool, c, provider);
+  const response = await fetch(
+    provider === "anthropic"
+      ? "https://api.anthropic.com/v1/models?limit=100"
+      : "https://api.openai.com/v1/models",
+    {
+      headers:
+        provider === "anthropic"
+          ? { "x-api-key": key, "anthropic-version": "2023-06-01" }
+          : { Authorization: "Bearer " + key },
+      signal: AbortSignal.timeout(15000),
+      redirect: "error",
+    },
+  );
+  if (!response.ok)
+    throw new HttpError(
+      502,
+      `Não foi possível consultar modelos (HTTP ${response.status}). Confira a credencial e as permissões no provedor.`,
+    );
+  const data = (await response.json()) as { data?: { id?: string }[] };
+  const ids = (data.data || []).map((item) => String(item.id || ""));
+  return {
+    provider,
+    available_models: ids
+      .filter((id) => /^(claude-|gpt-)[a-zA-Z0-9._-]{1,110}$/.test(id))
+      .slice(0, 40),
+    models: Object.keys(MODELS).filter(
+      (model) =>
+        MODELS[model as ModelId].provider === provider &&
+        ids.some((id) => id === model || id.startsWith(model + "-")),
+    ),
+    checked_at: new Date().toISOString(),
+  };
 }
 
 export const RATES = {
@@ -116,8 +164,9 @@ export const RATES = {
 export function usageCost(
   provider: "anthropic" | "openai",
   usage: Record<string, any>,
+  model?: ModelId,
 ) {
-  const r = RATES[provider];
+  const r = model ? MODELS[model] : RATES[provider];
   const input = Number(
       provider === "anthropic" ? usage.input_tokens : usage.input_tokens,
     ),
@@ -160,7 +209,7 @@ export type AiTask = {
   parse: (v: unknown) => Record<string, unknown>;
   warnings: string[];
 };
-const systemTask: AiTask = {
+export const systemTask: AiTask = {
   kind: "system",
   schema,
   instructions,
@@ -176,24 +225,33 @@ async function request(
   input: unknown,
   onUsage: (v: number, meta: unknown) => void,
   task: AiTask,
+  selectedModel?: ModelId,
+  effort: "low" | "medium" | "high" = "low",
 ) {
   const { schema, instructions } = task;
-  const key = await providerKey(pool, c, provider),
-    model =
-      process.env[
-        provider === "anthropic" ? "ANTHROPIC_MODEL" : "OPENAI_MODEL"
-      ] || (provider === "anthropic" ? "claude-opus-5-5" : "gpt-6.1-sol");
-  if (model !== (provider === "anthropic" ? "claude-opus-5-5" : "gpt-6.1-sol"))
+  const key = await providerKey(pool, c, provider);
+  const model =
+    selectedModel ||
+    ((process.env[
+      provider === "anthropic" ? "ANTHROPIC_MODEL" : "OPENAI_MODEL"
+    ] ||
+      (provider === "anthropic"
+        ? "claude-opus-5-5"
+        : "gpt-6.1-sol")) as ModelId);
+  if (!Object.hasOwn(MODELS, model) || MODELS[model].provider !== provider)
     throw new HttpError(
       503,
-      "Modelo sem tabela de custos homologada. Atualize RATES antes de trocar o modelo.",
+      "Modelo sem tabela de custos homologada. Escolha um modelo permitido no roteamento.",
     );
+  const rates = MODELS[model];
+  const maximumOutput = outputBudget(effort, provider);
   const anthropic = provider === "anthropic";
   const body = anthropic
     ? {
         model,
-        max_tokens: 2500,
+        max_tokens: maximumOutput,
         system: instructions,
+        output_config: { effort },
         messages: [{ role: "user", content: JSON.stringify(input) }],
         tools: [
           {
@@ -209,10 +267,10 @@ async function request(
         model,
         instructions,
         input: JSON.stringify(input),
-        max_output_tokens: 4000,
+        max_output_tokens: maximumOutput,
         store: false,
         service_tier: "default",
-        reasoning: { effort: "low" },
+        reasoning: { effort },
         tools: [
           {
             type: "function",
@@ -232,9 +290,10 @@ async function request(
       JSON.stringify(input) + JSON.stringify(schema) + instructions,
     ) +
       2048) *
-      RATES[provider].input *
+      rates.input *
+      1.25 *
       1000 +
-    (anthropic ? 2500 : 4000) * RATES[provider].output * 1000;
+    maximumOutput * rates.output * 1000;
   let reported = false;
 
   try {
@@ -260,10 +319,31 @@ async function request(
       },
     );
     if (!res.ok) {
-      reported = true;
+      reported = res.status >= 400 && res.status < 500 && res.status !== 408;
+      let hint = "Confira a chave, o acesso ao modelo e o saldo.";
+      try {
+        const data = (await res.json()) as { error?: { message?: string } };
+        const message = String(data.error?.message || "");
+        if (/max_tokens|budget_tokens|token budget/i.test(message))
+          hint =
+            "O provedor recusou o limite de tokens. Confira o esforço e o orçamento de saída.";
+        else if (/credit|balance|billing/i.test(message))
+          hint =
+            "Saldo ou faturamento da conta do provedor insuficiente. Confira o console do provedor.";
+        else if (/tool_choice|tool choice/i.test(message))
+          hint =
+            "O modelo recusou o modo de ferramenta. Use tool_choice auto na Anthropic.";
+        else if (/model|not_found/i.test(message))
+          hint =
+            "O modelo não está disponível para essa conta ou o identificador está incorreto. Confira os modelos liberados pelo provedor.";
+        else if (/temperature|top_p|unsupported|parameter/i.test(message))
+          hint = "Um parâmetro da requisição não é aceito por esse modelo.";
+      } catch {
+        /* Do not expose upstream response bodies. */
+      }
       throw new HttpError(
         502,
-        `Provedor recusou a requisição (HTTP ${res.status}). Verifique modelo, saldo e credenciais.`,
+        `Provedor recusou a requisição (HTTP ${res.status}). ${hint}`,
       );
     }
     const reader = res.body?.getReader();
@@ -281,7 +361,7 @@ async function request(
       chunks.push(value);
     }
     const data = JSON.parse(Buffer.concat(chunks).toString());
-    const charged = usageCost(provider, data.usage || {});
+    const charged = usageCost(provider, data.usage || {}, model);
     onUsage(charged, { provider, model, usage: data.usage });
     reported = true;
     const tool = anthropic
@@ -385,7 +465,8 @@ export async function generatePlan(
     .strictObject({
       request_id: z.uuid(),
       allow_fallback: z.boolean(),
-      context,
+      context: contextSchema,
+      ...aiOptions,
     })
     .parse(body);
   if (!license.features.includes("ai_plans"))
@@ -404,6 +485,7 @@ export async function generatePlan(
     b.allow_fallback,
     b.context,
     systemTask,
+    b,
   );
 }
 export async function runStructured(
@@ -414,23 +496,21 @@ export async function runStructured(
   allowFallback: boolean,
   input: unknown,
   task: AiTask,
+  options: AiOptions = {},
 ) {
   const userKey = actor.walletKey;
   const { schema, instructions } = task;
+  const route = await routeFor(pool, options, allowFallback);
+  const quote = budget(route, input, task.schema, task.instructions, task.kind);
+  if (options.quote_hash && options.quote_hash !== quote.quote_hash)
+    throw new HttpError(
+      409,
+      "A estimativa mudou. Atualize o orçamento antes de enviar.",
+    );
   const inputHash = createHash("sha256")
-    .update(JSON.stringify({ task: task.kind, input }))
+    .update(JSON.stringify({ task: task.kind, input, route, allowFallback }))
     .digest("hex");
-  const bytes =
-    Buffer.byteLength(
-      JSON.stringify(input) + JSON.stringify(schema) + instructions,
-    ) + 2048;
-  const maximum = Math.ceil(
-    bytes * RATES.anthropic.input * 1000 +
-      2500 * RATES.anthropic.output * 1000 +
-      (allowFallback
-        ? bytes * RATES.openai.input * 1000 + 4000 * RATES.openai.output * 1000
-        : 0),
-  );
+  const maximum = quote.reserved_microcredits;
 
   const prior = await transaction(pool, async (db) => {
     if (actor.licenseId)
@@ -488,13 +568,40 @@ export async function runStructured(
   };
   try {
     let result;
-    try {
-      result = await request(pool, c, "anthropic", input, onUsage, task);
-    } catch (primary) {
-      if (!allowFallback) throw primary;
-      result = await request(pool, c, "openai", input, onUsage, task);
-      result.warnings.push("Fallback OpenAI utilizado com sua autorização.");
+    let failure: unknown;
+    for (const [index, model] of route.models.entries()) {
+      try {
+        result = await request(
+          pool,
+          c,
+          MODELS[model].provider,
+          input,
+          onUsage,
+          task,
+          model,
+          route.effort,
+        );
+        if (index > 0)
+          result.warnings.push(
+            "Fallback utilizado dentro da reserva autorizada.",
+          );
+        break;
+      } catch (error) {
+        failure = error;
+      }
     }
+    if (!result) throw failure;
+    if (task.kind === "printing")
+      Object.assign(result, {
+        effort: route.effort,
+        mode: route.mode,
+        credits_used: charged / 1_000_000,
+        credits_reserved: maximum / 1_000_000,
+      });
+    else
+      result.warnings.push(
+        `Esforço ${route.effort}; consumo ${charged / 1_000_000} créditos; reserva ${maximum / 1_000_000} créditos.`,
+      );
     await settle(pool, requestId, "done", charged, result, usage);
     return result;
   } catch (error) {

@@ -308,16 +308,44 @@ pub fn require(feature: &str) -> Result<(), Error> {
     }
     Ok(())
 }
-pub fn generate(context: &Value, allow_fallback: bool) -> Result<OptimizationPlan, Error> {
+pub fn generate(
+    context: &Value,
+    allow_fallback: bool,
+    options: &Value,
+) -> Result<OptimizationPlan, Error> {
     let _guard = LOCK.lock().map_err(|_| invalid("Ativação ocupada"))?;
     let (a, claims) = verified()?;
     if !claims.features.iter().any(|f| f == "ai_plans") {
         return Err(invalid("Seu plano não inclui IA"));
     }
-    let data=post("/api/desktop/ai/plan",&json!({"request_id":uuid::Uuid::new_v4().to_string(),"context":context,"allow_fallback":allow_fallback}),Some(&a.refresh_token),145).map_err(cloud_error)?;
+    let mut body = json!({"request_id":uuid::Uuid::new_v4().to_string(),"context":context,"allow_fallback":allow_fallback});
+    for key in ["mode", "effort", "quote_hash"] {
+        if let Some(value) = options.get(key) {
+            body[key] = value.clone();
+        }
+    }
+    let data =
+        post("/api/desktop/ai/plan", &body, Some(&a.refresh_token), 145).map_err(cloud_error)?;
     let plan: OptimizationPlan = serde_json::from_value(data)?;
     plan.validate()?;
     Ok(plan)
+}
+pub fn estimate(input: &Value) -> Result<Value, Error> {
+    let _guard = LOCK.lock().map_err(|_| invalid("Ativação ocupada"))?;
+    let (a, claims) = verified()?;
+    if !claims.features.iter().any(|f| f == "ai_plans") {
+        return Err(invalid("Sua licença não inclui IA"));
+    }
+    if serde_json::to_vec(input)?.len() > 16384 {
+        return Err(invalid("Dados excedem o limite"));
+    }
+    post(
+        "/api/desktop/ai/estimate",
+        input,
+        Some(&a.refresh_token),
+        30,
+    )
+    .map_err(cloud_error)
 }
 pub fn printing(input: &Value) -> Result<Value, Error> {
     let _guard = LOCK.lock().map_err(|_| invalid("Ativação ocupada"))?;

@@ -1,3 +1,5 @@
+import { UserManagement } from "./UserManagement";
+import { PaymentSettings, RoutingSettings } from "./IntegrationSettings";
 import {
   lazy,
   Suspense,
@@ -730,6 +732,12 @@ function UserContent(c: Context & { data: Row }) {
               O instalador inclui o aplicativo, ícone e assistente inicial.
               Depois de instalar, abra Configurações → Licença e cole sua chave.
             </p>
+            <p className="fine muted">
+              A instalação solicita permissão de administrador. Esta beta ainda
+              não tem assinatura Authenticode comercial; o Windows pode exibir
+              alerta de editor desconhecido. UAC e SmartScreen são proteções
+              diferentes.
+            </p>
             <ol className="download-steps">
               <li>
                 Confirme seu plano ou receba uma licença do administrador.
@@ -1405,30 +1413,37 @@ function AdminContent(
             {
               label: "Ações",
               render: (r) => (
-                <button
-                  className="table-action"
-                  disabled={busy}
-                  onClick={() =>
-                    confirm(
-                      r.status === "active"
-                        ? "Bloquear usuário?"
-                        : "Reativar usuário?",
-                      r.email,
-                      () =>
-                        api("/admin/users/" + r.id + "/status", {
-                          status: r.status === "active" ? "blocked" : "active",
-                        })
-                          .then(() => r.reload?.())
-                          .then(() => {
-                            c.refreshCatalog();
-                            navigate("/admin/usuarios");
-                          }),
-                      r.status === "active" ? "Bloquear" : "Reativar",
-                    )
-                  }
-                >
-                  {r.status === "active" ? "Bloquear" : "Reativar"}
-                </button>
+                <div className="row-actions">
+                  <UserManagement
+                    row={r}
+                    onChanged={() => void mutate(async () => {})}
+                  />
+                  <button
+                    className="table-action"
+                    disabled={busy || r.status === "deleted"}
+                    onClick={() =>
+                      confirm(
+                        r.status === "active"
+                          ? "Bloquear usuário?"
+                          : "Reativar usuário?",
+                        r.email,
+                        () =>
+                          api("/admin/users/" + r.id + "/status", {
+                            status:
+                              r.status === "active" ? "blocked" : "active",
+                          })
+                            .then(() => r.reload?.())
+                            .then(() => {
+                              c.refreshCatalog();
+                              navigate("/admin/usuarios");
+                            }),
+                        r.status === "active" ? "Bloquear" : "Reativar",
+                      )
+                    }
+                  >
+                    {r.status === "active" ? "Bloquear" : "Reativar"}
+                  </button>
+                </div>
               ),
             },
           ]}
@@ -1650,20 +1665,42 @@ function AdminContent(
               label: "Ações",
               render: (row) =>
                 row.provider_id ? (
-                  <button
-                    className="table-action"
-                    disabled={busy}
-                    onClick={() =>
-                      void mutate(
-                        () =>
-                          api("/admin/subscriptions/" + row.id + "/sync", {}),
-                        "Assinatura consultada no gateway",
-                      )
-                    }
-                  >
-                    Sincronizar
-                    <RefreshCw size={12} />
-                  </button>
+                  <div className="row-actions">
+                    <button
+                      className="table-action"
+                      disabled={busy}
+                      onClick={() =>
+                        void mutate(
+                          () =>
+                            api("/admin/subscriptions/" + row.id + "/sync", {}),
+                          "Assinatura consultada no gateway",
+                        )
+                      }
+                    >
+                      Sincronizar
+                      <RefreshCw size={12} />
+                    </button>
+                    {!["cancelled", "canceled"].includes(row.status) && (
+                      <button
+                        className="table-action danger-text"
+                        disabled={busy}
+                        onClick={() =>
+                          confirm(
+                            "Cancelar renovações?",
+                            "O contrato será cancelado no Mercado Pago. O período pago é preservado; não há reembolso automático.",
+                            () =>
+                              api(
+                                "/admin/subscriptions/" + row.id + "/cancel",
+                                {},
+                              ).then(() => r.reload()),
+                            "Cancelar renovações",
+                          )
+                        }
+                      >
+                        Cancelar renovações
+                      </button>
+                    )}
+                  </div>
                 ) : (
                   <button
                     className="table-action"
@@ -1772,7 +1809,7 @@ function AdminContent(
       <>
         <Section
           title="Estado das integrações"
-          description="Credenciais de pagamento e assinatura ficam nas variáveis do Railway."
+          description="Credenciais de pagamento e IA ficam no cofre do servidor. A assinatura Ed25519 permanece nas variáveis do Railway."
         >
           <div className="integration-grid">
             <div>
@@ -1799,6 +1836,8 @@ function AdminContent(
             </div>
           </div>
         </Section>
+        <PaymentSettings data={data} mutate={mutate} busy={busy} />
+        <RoutingSettings data={data} mutate={mutate} busy={busy} />
         <Section
           title="Chaves dos provedores de IA"
           description="Gravadas com AES-256-GCM no banco. Depois de salvar, teste o provedor: faz uma chamada real e usa saldo da API da plataforma, sem descontar uma carteira de cliente. Repita o teste ao trocar a chave ou o modelo."
@@ -1822,8 +1861,8 @@ function AdminContent(
                 </h3>
                 <p className="fine muted">
                   {data.models[p.provider]} ·{" "}
-                  {p.last_four
-                    ? "Cofre: ••••" + p.last_four
+                  {p.stored
+                    ? "Configurada no cofre"
                     : p.environment
                       ? "Configurada no ambiente"
                       : "Ainda não configurada"}
@@ -1846,7 +1885,7 @@ function AdminContent(
                   <button
                     type="button"
                     className="button secondary small"
-                    disabled={busy || !(p.last_four || p.environment)}
+                    disabled={busy || !(p.stored || p.environment)}
                     onClick={() =>
                       void mutate(() =>
                         api("/admin/providers/" + p.provider + "/test", {}),
@@ -1855,7 +1894,21 @@ function AdminContent(
                   >
                     {busy ? "Aguarde…" : "Testar provedor (usa API)"}
                   </button>
-                  {p.last_four && (
+                  <button
+                    type="button"
+                    className="button secondary small"
+                    disabled={busy || !p.configured}
+                    onClick={() =>
+                      void mutate(
+                        () =>
+                          api("/admin/providers/" + p.provider + "/models", {}),
+                        "Modelos consultados no provedor",
+                      )
+                    }
+                  >
+                    Conferir modelos (sem IA)
+                  </button>
+                  {p.stored && (
                     <button
                       type="button"
                       className="table-action danger-text"
@@ -1878,6 +1931,15 @@ function AdminContent(
                     </button>
                   )}
                 </div>
+                {p.model_check && (
+                  <p className="fine muted">
+                    Modelos do catálogo disponíveis:{" "}
+                    {p.model_check.models.length
+                      ? p.model_check.models.join(", ")
+                      : "nenhum dos modelos do catálogo foi encontrado para esta conta"}
+                    .
+                  </p>
+                )}
                 {p.last_test && (
                   <div
                     role="status"

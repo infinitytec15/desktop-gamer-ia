@@ -1,9 +1,13 @@
 {
   "name": "@gameforge/printing",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "exports": {
+    "./ai": {
+      "types": "./dist/AiControls.d.ts",
+      "default": "./dist/AiControls.js"
+    },
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"

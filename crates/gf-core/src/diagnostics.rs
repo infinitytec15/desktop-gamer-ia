@@ -104,25 +104,137 @@ pub struct Metrics {
     pub cpu_usage: f32,
     pub memory_used_gb: f64,
     pub memory_total_gb: f64,
+    #[ts(type = "number")]
+    pub timestamp_ms: u64,
+    pub per_core_usage: Vec<f32>,
+    #[ts(type = "number")]
+    pub cpu_frequency_mhz: u64,
+    pub swap_used_gb: f64,
+    pub swap_total_gb: f64,
+    #[ts(type = "number")]
+    pub uptime_seconds: u64,
+    pub network_receive_mbps: f64,
+    pub network_transmit_mbps: f64,
+    pub disks: Vec<DiskReport>,
+    pub sensors: Vec<Sensor>,
+    pub gpus: Vec<crate::telemetry::GpuMetrics>,
+    #[ts(type = "number")]
+    pub hardware_sampled_at_ms: u64,
+    pub warnings: Vec<String>,
 }
 pub struct Monitor {
     system: System,
+    networks: sysinfo::Networks,
+    components: Components,
+    previous: std::time::Instant,
+    hardware_at: Option<std::time::Instant>,
+    hardware_timestamp: u64,
+    hardware: crate::telemetry::HardwareReadings,
+    disks: Vec<DiskReport>,
 }
 impl Default for Monitor {
     fn default() -> Self {
         Self {
             system: System::new_all(),
+            networks: sysinfo::Networks::new_with_refreshed_list(),
+            components: Components::new_with_refreshed_list(),
+            previous: std::time::Instant::now(),
+            hardware_at: None,
+            hardware_timestamp: 0,
+            hardware: crate::telemetry::HardwareReadings::default(),
+            disks: Vec::new(),
         }
     }
 }
 impl Monitor {
     pub fn sample(&mut self) -> Metrics {
+        let now = std::time::Instant::now();
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|v| v.as_millis() as u64)
+            .unwrap_or(0);
         self.system.refresh_cpu_usage();
+        self.system.refresh_cpu_frequency();
         self.system.refresh_memory();
+        self.networks.refresh(true);
+        let seconds = now.duration_since(self.previous).as_secs_f64().max(0.05);
+        self.previous = now;
+        let received = self
+            .networks
+            .values()
+            .map(|n| n.received() as f64)
+            .sum::<f64>()
+            * 8.
+            / seconds
+            / 1_000_000.;
+        let sent = self
+            .networks
+            .values()
+            .map(|n| n.transmitted() as f64)
+            .sum::<f64>()
+            * 8.
+            / seconds
+            / 1_000_000.;
+        if self
+            .hardware_at
+            .is_none_or(|at| now.duration_since(at).as_secs() >= 3)
+        {
+            self.components.refresh(true);
+            self.hardware = crate::telemetry::hardware();
+            self.hardware_at = Some(now);
+            self.hardware_timestamp = timestamp;
+            self.disks = Disks::new_with_refreshed_list()
+                .iter()
+                .map(|d| DiskReport {
+                    name: d.name().to_string_lossy().into(),
+                    total_gb: d.total_space() as f64 / 1073741824.,
+                    available_gb: d.available_space() as f64 / 1073741824.,
+                    kind: format!("{:?}", d.kind()),
+                })
+                .collect();
+        }
+        let mut sensors = self
+            .components
+            .iter()
+            .map(|c| Sensor {
+                name: c.label().into(),
+                temperature: c.temperature(),
+            })
+            .collect::<Vec<_>>();
+        sensors.extend(self.hardware.sensors.clone());
+        let mut warnings = Vec::new();
+        if sensors.is_empty() {
+            warnings.push("Temperatura de CPU/placa-mãe não exposta. Para sensores adicionais, use o provedor WMI do LibreHardwareMonitor; ele não é instalado automaticamente.".into());
+        }
+        if self.hardware.gpus.is_empty() {
+            warnings.push(
+                "Driver não expôs métricas de GPU via NVIDIA NVSMI ou contadores Windows WDDM."
+                    .into(),
+            );
+        }
         Metrics {
             cpu_usage: self.system.global_cpu_usage(),
             memory_used_gb: self.system.used_memory() as f64 / 1073741824.,
             memory_total_gb: self.system.total_memory() as f64 / 1073741824.,
+            timestamp_ms: timestamp,
+            per_core_usage: self.system.cpus().iter().map(|c| c.cpu_usage()).collect(),
+            cpu_frequency_mhz: self
+                .system
+                .cpus()
+                .iter()
+                .map(|c| c.frequency())
+                .max()
+                .unwrap_or(0),
+            swap_used_gb: self.system.used_swap() as f64 / 1073741824.,
+            swap_total_gb: self.system.total_swap() as f64 / 1073741824.,
+            uptime_seconds: System::uptime(),
+            network_receive_mbps: received,
+            network_transmit_mbps: sent,
+            disks: self.disks.clone(),
+            sensors,
+            gpus: self.hardware.gpus.clone(),
+            hardware_sampled_at_ms: self.hardware_timestamp,
+            warnings,
         }
     }
 }

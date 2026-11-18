@@ -1,3 +1,4 @@
+import { paymentConfig } from "./integrations.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import type { Config } from "./config.js";
@@ -64,6 +65,7 @@ export async function checkout(
   userId: string,
   planId: string,
 ) {
+  c = await paymentConfig(pool, c);
   if (!billingReady(c))
     throw new HttpError(
       503,
@@ -170,6 +172,7 @@ export async function cancelSubscription(
   userId: string,
   id: string,
 ) {
+  c = await paymentConfig(pool, c);
   const row = (
     await pool.query("SELECT * FROM subscriptions WHERE id=$1 AND user_id=$2", [
       id,
@@ -208,6 +211,7 @@ export async function reconcileSubscription(
   c: Config,
   providerId: string,
 ) {
+  c = await paymentConfig(pool, c);
   const sub = await mp(c, "/preapproval/" + encodeURIComponent(providerId));
   const id = str(sub.external_reference);
   if (!/^[a-f0-9-]{36}$/i.test(id)) return;
@@ -235,6 +239,7 @@ export async function reconcileInvoice(
   c: Config,
   invoiceId: string,
 ) {
+  c = await paymentConfig(pool, c);
   if (!/^[a-zA-Z0-9_-]{1,80}$/.test(invoiceId))
     throw new HttpError(400, "ID de fatura inválido");
   const invoice = await mp(
@@ -327,6 +332,7 @@ export async function reconcilePayment(
   c: Config,
   paymentId: string,
 ) {
+  c = await paymentConfig(pool, c);
   if (await reconcileTopup(pool, c, paymentId)) return;
   const saved = (
     await pool.query("SELECT invoice_id FROM payments WHERE provider_id=$1", [
@@ -343,6 +349,7 @@ export async function reconcilePayment(
   if (sub?.provider_id) await reconcileSubscription(pool, c, sub.provider_id);
 }
 export async function workInbox(pool: Pool, c: Config) {
+  c = await paymentConfig(pool, c);
   const rows = await transaction(pool, async (db) => {
     const selected = await db.query(
       "SELECT * FROM webhook_events WHERE (status IN ('pending','retry') AND available_at<=now()) OR (status='processing' AND locked_at<now()-interval '5 minutes') ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 5",

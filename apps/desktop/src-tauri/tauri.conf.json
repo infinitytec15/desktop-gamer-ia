@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "GameForge AI",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "identifier": "app.gameforge.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -25,16 +25,23 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "publisher": "GameForge AI",
     "shortDescription": "Diagnóstico, streaming e planejamento de impressão 3D com IA",
     "longDescription": "GameForge AI reúne diagnóstico do PC, planejamento com Claude e OpenAI, ajustes Windows revisáveis, perfis OBS e análise de impressão 3D FDM/resina. Versão beta com aprovação, cópias de perfis e histórico de recuperação.",
-    "icon": ["icons/icon.png", "icons/icon.ico"],
+    "icon": [
+      "icons/icon.png",
+      "icons/icon.ico"
+    ],
     "windows": {
       "allowDowngrades": false,
       "nsis": {
-        "installMode": "currentUser",
-        "languages": ["PortugueseBR"],
+        "installMode": "perMachine",
+        "languages": [
+          "PortugueseBR"
+        ],
         "displayLanguageSelector": false,
         "startMenuFolder": "GameForge AI",
         "installerIcon": "icons/icon.ico",

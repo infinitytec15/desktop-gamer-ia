@@ -1,7 +1,7 @@
 {
   "name": "gameforge",
   "private": true,
-  "version": "0.4.0",
+  "version": "0.5.0",
   "workspaces": [
     "apps/desktop",
     "apps/web",
@@ -16,7 +16,7 @@
     "desktop": "npm run tauri -w @gameforge/desktop -- dev",
     "e2e": "playwright test",
     "package": "npm run tauri -w @gameforge/desktop -- build --debug --no-bundle",
-    "installer": "npm run tauri -w @gameforge/desktop -- build --bundles nsis",
+    "installer": "node scripts/build-installer.mjs",
     "web:dev": "npm run dev -w @gameforge/web",
     "web:build": "npm run build -w @gameforge/web",
     "api:dev": "npm run dev -w @gameforge/api",

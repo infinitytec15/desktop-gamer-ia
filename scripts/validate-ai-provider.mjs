@@ -4,13 +4,16 @@ import { spawnSync } from "node:child_process";
 import assert from "node:assert/strict";
 
 const args = process.argv.slice(2);
-const provider = args.find((arg) => arg !== "--run") || "openai";
+const provider =
+  args.find((arg) => arg !== "--run" && arg !== "--models") || "openai";
 assert.ok(
   ["openai", "anthropic"].includes(provider),
   "Use openai ou anthropic",
 );
 assert.ok(
-  args.every((arg) => ["--run", "openai", "anthropic"].includes(arg)),
+  args.every((arg) =>
+    ["--run", "--models", "openai", "anthropic"].includes(arg),
+  ),
   "Argumento desconhecido",
 );
 const envResult = spawnSync(
@@ -62,7 +65,7 @@ assert.ok(cookie);
 try {
   const config = await (await call("/admin/config", undefined, cookie)).json();
   const state = config.providers.find((p) => p.provider === provider);
-  const configured = !!(state?.last_four || state?.environment);
+  const configured = !!(state?.configured || state?.environment);
   console.log(
     JSON.stringify({
       provider,
@@ -71,6 +74,15 @@ try {
       last_test: state?.last_test || null,
     }),
   );
+  if (args.includes("--models")) {
+    console.log(
+      JSON.stringify(
+        await (
+          await call("/admin/providers/" + provider + "/models", {}, cookie)
+        ).json(),
+      ),
+    );
+  }
   if (args.includes("--run")) {
     assert.ok(configured, "Cadastre a chave no painel admin antes de executar");
     const result = await (

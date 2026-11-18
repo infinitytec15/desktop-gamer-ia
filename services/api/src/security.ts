@@ -48,26 +48,34 @@ export async function passwordCheck(password: string, hash: string) {
     expected,
   );
 }
-export function encrypt(secret: string, key: Buffer) {
+export function encrypt(secret: string, key: Buffer, scope?: string) {
   const iv = randomBytes(12),
     cipher = createCipheriv("aes-256-gcm", key, iv);
+  if (scope) cipher.setAAD(Buffer.from(scope));
   const encrypted = Buffer.concat([
     cipher.update(secret, "utf8"),
     cipher.final(),
   ]);
-  return [
-    iv.toString("base64"),
-    cipher.getAuthTag().toString("base64"),
-    encrypted.toString("base64"),
-  ].join(".");
+  return (
+    (scope ? "v2." : "") +
+    [
+      iv.toString("base64"),
+      cipher.getAuthTag().toString("base64"),
+      encrypted.toString("base64"),
+    ].join(".")
+  );
 }
-export function decrypt(value: string, key: Buffer) {
+export function decrypt(value: string, key: Buffer, scope?: string) {
+  const bound = value.startsWith("v2.");
+  if (bound && !scope) throw new Error("Escopo do segredo ausente");
+  if (bound) value = value.slice(3);
   const [iv, tag, data] = value.split(".");
   const decipher = createDecipheriv(
     "aes-256-gcm",
     key,
     Buffer.from(iv, "base64"),
   );
+  if (bound) decipher.setAAD(Buffer.from(scope!));
   decipher.setAuthTag(Buffer.from(tag, "base64"));
   return Buffer.concat([
     decipher.update(Buffer.from(data, "base64")),

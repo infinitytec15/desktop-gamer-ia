@@ -1,6 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use gf_core::{Plan, PreferenceStore, Snapshot};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 #[tauri::command]
 async fn diagnose(
     state: tauri::State<'_, Mutex<PreferenceStore>>,
@@ -34,10 +34,15 @@ async fn obs_status() -> Result<gf_core::integrations::Probe, String> {
         .map_err(|e| e.to_string())
 }
 #[tauri::command]
-fn monitor_sample(
-    state: tauri::State<'_, Mutex<gf_core::diagnostics::Monitor>>,
+async fn monitor_sample(
+    state: tauri::State<'_, Arc<Mutex<gf_core::diagnostics::Monitor>>>,
 ) -> Result<gf_core::diagnostics::Metrics, String> {
-    Ok(state.lock().map_err(|e| e.to_string())?.sample())
+    let monitor = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        Ok(monitor.lock().map_err(|e| e.to_string())?.sample())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 #[tauri::command]
 fn list_snapshots(
@@ -132,6 +137,7 @@ async fn preview_ai(
 #[tauri::command]
 async fn generate_plan(
     allow_fallback: bool,
+    options: Option<serde_json::Value>,
     state: tauri::State<'_, AiContext>,
 ) -> Result<gf_core::automation::OptimizationPlan, String> {
     let context = state
@@ -141,12 +147,16 @@ async fn generate_plan(
         .clone()
         .ok_or("Revise primeiro o diagnóstico que será enviado à IA")?;
     tauri::async_runtime::spawn_blocking(move || {
-        gf_core::cloud::generate(&context, allow_fallback)
-            .and_then(|p| {
-                PreferenceStore::new(gf_core::data_dir()).record_plan(&p)?;
-                Ok(p)
-            })
-            .map_err(|e| e.to_string())
+        gf_core::cloud::generate(
+            &context,
+            allow_fallback,
+            &options.unwrap_or_else(|| serde_json::json!({})),
+        )
+        .and_then(|p| {
+            PreferenceStore::new(gf_core::data_dir()).record_plan(&p)?;
+            Ok(p)
+        })
+        .map_err(|e| e.to_string())
     })
     .await
     .map_err(|e| e.to_string())?
@@ -296,6 +306,14 @@ async fn license_deactivate() -> Result<(), String> {
         .map_err(|e| e.to_string())?
 }
 #[tauri::command]
+async fn estimate_ai(input: serde_json::Value) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        gf_core::cloud::estimate(&input).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+#[tauri::command]
 async fn printing_ai(input: serde_json::Value) -> Result<serde_json::Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
         gf_core::cloud::printing(&input).map_err(|e| e.to_string())
@@ -368,10 +386,13 @@ fn main() {
     let result = tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .manage(AiContext(Mutex::new(None)))
-        .manage(Mutex::new(gf_core::diagnostics::Monitor::default()))
+        .manage(Arc::new(Mutex::new(
+            gf_core::diagnostics::Monitor::default(),
+        )))
         .manage(Mutex::new(PreferenceStore::new(gf_core::data_dir())))
         .invoke_handler(tauri::generate_handler![
             printing_ai,
+            estimate_ai,
             save_print_artifact,
             license_status,
             license_activate,

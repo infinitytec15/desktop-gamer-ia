@@ -14,7 +14,10 @@ import { createApp } from "../src/app.js";
 import { createLicense, activate, deviceAuth } from "../src/license.js";
 import { grant, wallet, reserve, MICRO, settle } from "../src/credits.js";
 import { reconcileInvoice, checkout } from "../src/billing.js";
-import { generatePlan } from "../src/planner.js";
+import { generatePlan, runStructured, systemTask } from "../src/planner.js";
+import { estimate } from "../src/estimates.js";
+import { paymentConfig } from "../src/integrations.js";
+import { decrypt } from "../src/security.js";
 import { generatePrinting, accountActor } from "../src/printing.js";
 import { briefSchema, localPlan } from "@gameforge/printing";
 const enabled = !!process.env.TEST_DATABASE_URL;
@@ -726,5 +729,332 @@ integration(
       globalThis.fetch = realFetch;
       delete process.env.OPENAI_API_KEY;
     }
+  },
+);
+
+integration(
+  "routing quotes grow with effort, enforce consent hash and settle the selected model cost",
+  async () => {
+    const input = {
+      goal: "Integration routing check",
+      os: "Fixture",
+      architecture: "x86_64",
+      cpu: "Fixture",
+      cores: 8,
+      ram_gb: 16,
+      used_ram_gb: 4,
+      cpu_usage: 15,
+      disks: [],
+    };
+    process.env.OPENAI_API_KEY = "fixture-router-key";
+    process.env.ANTHROPIC_API_KEY = "fixture-router-key";
+    const body = {
+      task: "system",
+      context: input,
+      mode: "economy",
+      effort: "low",
+      allow_fallback: true,
+    };
+    const low = await estimate(pool, body),
+      high = await estimate(pool, { ...body, effort: "high" }),
+      advanced = await estimate(pool, { ...body, mode: "advanced" });
+    assert.ok(high.maximum_credits > low.maximum_credits);
+    assert.ok(advanced.maximum_credits > low.maximum_credits);
+    assert.equal(low.models[0], "gpt-6-luna");
+    const actor = {
+      deviceId: null,
+      licenseId: null,
+      walletKey: "fixture:router:" + randomUUID(),
+    };
+    await transaction(pool, (db) =>
+      grant(db, actor.walletKey, "router-test:" + actor.walletKey, 1000, true),
+    );
+    let calls = 0;
+    globalThis.fetch = async (input, init) => {
+      if (String(input) === "https://api.openai.com/v1/responses") {
+        calls++;
+        const sent = JSON.parse(String(init?.body));
+        assert.equal(sent.model, "gpt-6-luna");
+        assert.equal(sent.reasoning.effort, "low");
+        return Response.json({
+          usage: { input_tokens: 1000, output_tokens: 1000 },
+          output: [
+            {
+              type: "function_call",
+              name: "submit_plan",
+              arguments: JSON.stringify({
+                summary: "Budget check",
+                system_actions: [],
+                video: { width: 1280, height: 720, fps: 30, bitrate: 3500 },
+              }),
+            },
+          ],
+        });
+      }
+      return realFetch(input, init);
+    };
+    try {
+      await assert.rejects(
+        () =>
+          runStructured(pool, c, actor, randomUUID(), true, input, systemTask, {
+            mode: "economy",
+            effort: "high",
+            quote_hash: low.quote_hash,
+          }),
+        /estimativa mudou/,
+      );
+      assert.equal(calls, 0);
+      assert.equal((await wallet(pool, actor.walletKey)).balance, 1000);
+      const id = randomUUID(),
+        options = {
+          mode: "economy" as const,
+          effort: "low" as const,
+          quote_hash: low.quote_hash,
+        };
+      await runStructured(pool, c, actor, id, true, input, systemTask, options);
+      await runStructured(pool, c, actor, id, true, input, systemTask, options);
+      assert.equal(calls, 1);
+      assert.equal((await wallet(pool, actor.walletKey)).balance, 999.4);
+    } finally {
+      globalThis.fetch = realFetch;
+      delete process.env.OPENAI_API_KEY;
+      delete process.env.ANTHROPIC_API_KEY;
+    }
+  },
+);
+
+integration(
+  "payment vault is write-only, context-bound and restores its encrypted snapshot",
+  async () => {
+    const login = await post("/auth/admin", {
+      email: c.adminEmail,
+      password: c.adminPassword,
+    });
+    const cookie = login.headers.get("set-cookie")!.split(";")[0];
+    const key = "fixture-mp-token-secret-123456",
+      secret = "fixture-mp-webhook-secret-123456";
+    assert.equal((await post("/admin/mercadopago", {})).status, 403);
+    const cross = await realFetch(origin + "/api/admin/mercadopago", {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        Origin: "https://evil.example",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ access_token: key }),
+    });
+    assert.equal(cross.status, 403);
+    let response = await post(
+      "/admin/mercadopago",
+      {
+        access_token: key,
+        webhook_secret: secret,
+        collector_id: "123",
+        billing_enabled: false,
+        live_mode: false,
+      },
+      cookie,
+    );
+    assert.equal(response.status, 200);
+    const status = await response.json();
+    assert.ok(!JSON.stringify(status).includes(key));
+    assert.ok(!JSON.stringify(status).includes(secret));
+    assert.equal(status.token, true);
+    assert.match(status.webhook_url, /webhooks\/mercadopago$/);
+    const stored = (
+      await pool.query(
+        "SELECT encrypted_value FROM integration_credentials WHERE name='mercadopago'",
+      )
+    ).rows[0].encrypted_value;
+    assert.ok(stored.startsWith("v2."));
+    assert.ok(!stored.includes(key));
+    assert.throws(() => decrypt(stored, c.encryptionKey, "provider:openai"));
+    assert.equal((await paymentConfig(pool, c)).mpToken, key);
+    await post(
+      "/admin/mercadopago",
+      { access_token: key + "-changed", billing_enabled: false },
+      cookie,
+    );
+    await post("/admin/mercadopago/restore", {}, cookie);
+    assert.equal((await paymentConfig(pool, c)).mpToken, key);
+    await post("/admin/mercadopago/restore", {}, cookie);
+    assert.equal((await paymentConfig(pool, c)).mpToken, c.mpToken);
+    const audit = (
+      await pool.query(
+        "SELECT metadata FROM audit_log WHERE event='payment.configured' ORDER BY id DESC LIMIT 2",
+      )
+    ).rows;
+    assert.ok(!JSON.stringify(audit).includes(key));
+    assert.ok(!JSON.stringify(audit).includes(secret));
+    await post(
+      "/admin/providers/openai",
+      { key: "fixture-provider-snapshot-first-12345" },
+      cookie,
+    );
+    await post(
+      "/admin/providers/openai",
+      { key: "fixture-provider-snapshot-second-12345" },
+      cookie,
+    );
+    assert.equal(
+      (await post("/admin/providers/openai/restore", {}, cookie)).status,
+      200,
+    );
+    const restored = (
+      await pool.query(
+        "SELECT encrypted_value,last_four FROM provider_credentials WHERE provider='openai'",
+      )
+    ).rows[0];
+    assert.equal(
+      decrypt(restored.encrypted_value, c.encryptionKey, "provider:openai"),
+      "fixture-provider-snapshot-first-12345",
+    );
+    assert.equal(restored.last_four, "****");
+    const visible = await (
+      await realFetch(origin + "/api/admin/config", {
+        headers: { Cookie: cookie },
+      })
+    ).json();
+    assert.ok(!JSON.stringify(visible).includes("snapshot-first"));
+    assert.ok(!Object.hasOwn(visible.providers[1], "last_four"));
+    await pool.query(
+      "DELETE FROM provider_credentials WHERE provider='openai'",
+    );
+  },
+);
+
+integration(
+  "manual subscriptions grant once, issue a bounded user key and revoke account/device access",
+  async () => {
+    const admin = await post("/auth/admin", {
+        email: c.adminEmail,
+        password: c.adminPassword,
+      }),
+      cookie = admin.headers.get("set-cookie")!.split(";")[0];
+    const email = randomUUID() + "@example.test",
+      registration = await post("/auth/register", {
+        email,
+        name: "Manual fixture",
+        password: "fixture-manual-password-123",
+      });
+    assert.equal(registration.status, 201);
+    const userCookie = registration.headers.get("set-cookie")!.split(";")[0];
+    const uid = (
+      await pool.query("SELECT id FROM users WHERE email=$1", [email])
+    ).rows[0].id;
+    const grantBody = {
+      request_id: randomUUID(),
+      planId: "core",
+      days: 5,
+      credits: 100,
+    };
+    assert.equal(
+      (
+        await post(
+          "/admin/users/" + uid + "/manual-subscription",
+          grantBody,
+          userCookie,
+        )
+      ).status,
+      403,
+    );
+    const first = await post(
+      "/admin/users/" + uid + "/manual-subscription",
+      grantBody,
+      cookie,
+    );
+    assert.equal(first.status, 201);
+    const manualId = (await first.json()).id;
+    assert.equal(
+      (
+        await post(
+          "/admin/users/" + uid + "/manual-subscription",
+          grantBody,
+          cookie,
+        )
+      ).status,
+      201,
+    );
+    assert.equal((await wallet(pool, "user:" + uid)).balance, 100);
+    const keyResponse = await post("/account/licenses", {}, userCookie);
+    assert.equal(keyResponse.status, 201);
+    const key = (await keyResponse.json()).key;
+    assert.equal((await post("/account/licenses", {}, userCookie)).status, 409);
+    const activated = await activate(
+      pool,
+      c,
+      key,
+      "manual-fixture-device-12345",
+      "Manual check",
+      "windows",
+    );
+    assert.ok(await deviceAuth(pool, c, activated.refresh_token));
+    assert.equal(
+      (
+        await post(
+          "/admin/manual-subscriptions/" + manualId + "/edit",
+          { planId: "creator", days: 3 },
+          cookie,
+        )
+      ).status,
+      200,
+    );
+    assert.equal(
+      (await deviceAuth(pool, c, activated.refresh_token)).license.plan_id,
+      "creator",
+    );
+    assert.equal(
+      (
+        await post(
+          "/admin/credits",
+          { email, credits: 25, reason: "fixture allocation" },
+          cookie,
+        )
+      ).status,
+      200,
+    );
+    assert.equal((await wallet(pool, "user:" + uid)).balance, 125);
+    assert.equal(
+      (
+        await post(
+          "/admin/users/" + uid + "/status",
+          { status: "blocked" },
+          cookie,
+        )
+      ).status,
+      200,
+    );
+    await assert.rejects(() => deviceAuth(pool, c, activated.refresh_token));
+    await post("/admin/users/" + uid + "/status", { status: "active" }, cookie);
+    assert.equal(
+      (
+        await post(
+          "/admin/manual-subscriptions/" + manualId + "/revoke",
+          {},
+          cookie,
+        )
+      ).status,
+      200,
+    );
+    await assert.rejects(() => deviceAuth(pool, c, activated.refresh_token));
+    assert.equal(
+      (await post("/admin/users/" + uid + "/remove", {}, cookie)).status,
+      200,
+    );
+    const removed = (
+      await pool.query("SELECT status,email FROM users WHERE id=$1", [uid])
+    ).rows[0];
+    assert.equal(removed.status, "deleted");
+    assert.notEqual(removed.email, email);
+    assert.equal(
+      (
+        await post(
+          "/admin/users/" + uid + "/status",
+          { status: "active" },
+          cookie,
+        )
+      ).status,
+      404,
+    );
   },
 );

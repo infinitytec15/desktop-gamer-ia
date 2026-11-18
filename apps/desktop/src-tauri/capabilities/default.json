@@ -38,6 +38,7 @@
     "allow-license-activate",
     "allow-license-deactivate",
     "allow-printing-ai",
+    "allow-estimate-ai",
     "allow-save-print-artifact"
   ]
 }

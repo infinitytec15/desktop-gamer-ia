@@ -4,6 +4,7 @@ fn main() {
     let attributes =
         tauri_build::Attributes::new().app_manifest(tauri_build::AppManifest::new().commands(&[
             "printing_ai",
+            "estimate_ai",
             "save_print_artifact",
             "license_status",
             "license_activate",

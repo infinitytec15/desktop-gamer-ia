@@ -1,3 +1,4 @@
+import { paymentConfig } from "./integrations.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import type { Config } from "./config.js";
@@ -11,6 +12,7 @@ export async function topupCheckout(
   userId: string,
   packageId: string,
 ) {
+  c = await paymentConfig(pool, c);
   if (!billingReady(c))
     throw new HttpError(503, "Pagamento ainda não habilitado");
   const intent = await transaction(pool, async (db) => {
@@ -108,6 +110,7 @@ export async function topupCheckout(
   }
 }
 export async function reconcileTopup(pool: Pool, c: Config, paymentId: string) {
+  c = await paymentConfig(pool, c);
   const payment = await mp(c, "/v1/payments/" + encodeURIComponent(paymentId));
   const ref = String(payment.external_reference || "");
   if (!/^[a-f0-9-]{36}$/i.test(ref)) return false;

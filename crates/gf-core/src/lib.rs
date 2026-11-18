@@ -8,6 +8,7 @@ pub mod obs;
 pub mod printing;
 pub mod secrets;
 pub mod system;
+pub mod telemetry;
 pub mod workflow;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fs, path::PathBuf};

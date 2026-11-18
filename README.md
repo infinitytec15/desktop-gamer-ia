@@ -1,4 +1,4 @@
-# GameForge AI 0.4
+# GameForge AI 0.5
 
 Aplicativo Windows para diagnosticar o PC, planejar ajustes com Claude Opus 5.5 e fallback GPT 6.1 Sol, revisar/aplicar mudanças do catálogo e configurar perfis OBS. Inclui site público 3D, contas, painéis de usuário/admin, licenças por dispositivo, assinaturas Mercado Pago e carteira de créditos de IA.
 
@@ -29,7 +29,7 @@ npm run desktop           # desenvolvimento nativo
 npm run dev               # prévia da UI, sem acesso real ao PC
 ```
 
-Instalador: `target/release/bundle/nsis/GameForge AI_0.4.0_x64-setup.exe`. Inclui logo, apresentação, atalho e guia inicial. Depois de instalar, vá em **Configurações → Licença**, cole sua chave e conecte o OBS. Não precisa de chaves de API no desktop.
+Instalador: `target/release/bundle/nsis/GameForge AI_0.5.0_x64-setup.exe`. Inclui logo, apresentação, atalho e guia inicial. Depois de instalar, vá em **Configurações → Licença**, cole sua chave e conecte o OBS. Não precisa de chaves de API no desktop.
 
 O app coleta CPU/RAM/discos/processos/sensores disponíveis, detecta instalações registradas e jogos Steam/Epic, testa conectividade TCP e registra objetivos/aceites. A IA recebe somente o contexto revisado e propõe ações de um catálogo fechado. Quatro ações Windows: Game Mode, captura Game DVR, aceleração do mouse e energia Alto desempenho. Sistema exige revisão, elevação e restauração disponível. OBS usa WebSocket v5, autenticação, perfil separado, x264/veryfast/CBR e uma plataforma RTMP/RTMPS por perfil. Restauração permanece gratuita e local.
 
@@ -47,6 +47,14 @@ cargo check -p gameforge
 ## Impressão 3D
 
 Novo módulo no desktop, painel do usuário e `/impressao-3d`: catálogo de 166 nomes de modelos FDM e famílias de resina, modelo personalizado, análise local de STL, orientação de uma cópia, parâmetros FDM e resina, comparação e exportação revisada. IA usa a mesma carteira, licença e proxy; planejamento local não usa créditos. JSON da família Orca, Cura ZIP e Prusa INI têm adaptadores estruturais; FlashPrint e fatiadores de resina possuem aplicação guiada. Não envia comandos à impressora. Consulte [compatibilidade, calibração e limites](docs/IMPRESSAO-3D.md).
+
+## Roteamento, administração e monitor (0.5)
+
+Econômico (Luna/Haiku), Equilibrado (Terra/Sonnet) e Avançado (Opus/Sol), com esforço rápido/normal/profundo e estimativa/reserva antes da chamada. Modelos e custos são permitidos pelo servidor; fallback só dentro do orçamento autorizado. Admin configura rotas, chaves de IA e Mercado Pago cifradas, copia webhook e restaura a versão anterior do cofre. Gestão de usuário inclui concessão manual, saldo, cadastro, bloqueio e remoção de acesso com histórico financeiro preservado.
+
+Monitor local com gráficos CPU/RAM/GPU/temperaturas/rede, núcleos e volumes. NVIDIA NVSMI e WDDM no Windows; sensores adicionais via sysinfo/LibreHardwareMonitor se disponíveis. GPU real validada nesta máquina; temperatura de CPU não estava exposta. Não instala drivers nem inventa sensores.
+
+Instalador 0.5 pede UAC para instalar por máquina. Sem certificado comercial fornecido, continua beta não assinada: UAC não elimina SmartScreen. Para assinatura válida, consulte [distribuição e segurança](docs/SEGURANCA-E-OPERACAO.md).
 
 ## Limites da beta
 

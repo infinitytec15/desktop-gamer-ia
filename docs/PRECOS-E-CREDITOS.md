@@ -38,3 +38,18 @@ Erros antes do envio não cobram tokens. Falhas de transporte depois do envio po
 Créditos de assinatura e recarga só entram depois do pagamento canônico aprovado. Concessões têm origem única para impedir saldo duplicado em reenvios. Estornos/contestações revertem a concessão original; se já houve consumo, a carteira pode ficar negativa, bloqueando novas análises até regularização. Os créditos acumulam sem expiração nesta oferta, mas usar IA requer licença vigente; uma recarga não estende a licença.
 
 Créditos virtuais não são dinheiro sacável. Não exponha chaves dos provedores no desktop ou no navegador. Não prometa quantidade ilimitada de ações com uma assinatura de preço fixo.
+
+
+## Roteamento 0.5 — 18/11/2026
+
+A unidade comercial continua 1 crédito = US$ 0,001 de consumo Standard. Não existe tarifa fixa por ação. Novos modos escolhem modelos mais econômicos para tarefas focadas; modo e esforço aparecem antes de enviar, com estimativa e reserva máxima incluindo fallback autorizado.
+
+| Modo padrão | Principal / fallback | Entrada / saída / cache em US$/milhão |
+| --- | --- | --- |
+| Econômico | GPT-6 Luna / Claude Haiku 5.5 | 0,10 / 0,50 / 0,01 em ambos, até os limites de contexto usados pelo app |
+| Equilibrado | GPT-6.1 Terra / Claude Sonnet 5.5 | Terra 1 / 5 / 0,05; Sonnet 2 / 10 / 0,10 |
+| Avançado | Claude Opus 5.5 / GPT-6.1 Sol | Opus 4 / 20 / 0,20; Sol 2 / 10 / 0,10 |
+
+Esforço rápido/normal/profundo envia low/medium/high. Tetos de saída: rápido 4096 Anthropic ou 4000 OpenAI; normal 6500; profundo 10000. Pensamento/raciocínio conta na saída. Os tetos são limites de segurança, não tokens obrigatoriamente gastos. Mais esforço pode consumir mais e não garante melhor resultado. O admin edita rotas apenas entre modelos com preço homologado; custo crescente entre modos é validado. Dados, contrato, modelo e orçamento são vinculados ao hash da estimativa. Preço/modelo manipulado pelo cliente não é aceito.
+
+Fontes oficiais: [Luna](https://developers.openai.com/api/docs/models/gpt-6-luna), [Terra](https://developers.openai.com/api/docs/models/gpt-6.1-terra), [Sol](https://developers.openai.com/api/docs/models/gpt-6.1-sol), [preços Anthropic](https://platform.claude.com/docs/en/about-claude/pricing) e [esforço Claude](https://platform.claude.com/docs/en/build-with-claude/effort). Haiku tem tarifa maior acima de 100 mil tokens; o app limita payload/contexto abaixo desse patamar. Não usa modos Fast/Flex, ferramentas pagas externas ou cache explícito. Revalidar custos ao trocar os modelos ou a política de cache.

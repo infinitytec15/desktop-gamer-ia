@@ -48,13 +48,11 @@ test("printing section, local STL and reviewed native-profile copy work without 
   );
   await page.getByLabel("Marca da impressora").selectOption("Creality");
   await page.getByLabel("Modelo da impressora").fill("Fixture K1");
-  await page
-    .getByLabel("Analisar arquivo STL")
-    .setInputFiles({
-      name: "fixture-box.stl",
-      mimeType: "application/octet-stream",
-      buffer: fixtureStl(),
-    });
+  await page.getByLabel("Analisar arquivo STL").setInputFiles({
+    name: "fixture-box.stl",
+    mimeType: "application/octet-stream",
+    buffer: fixtureStl(),
+  });
   await expect(page.getByText("1 cm³", { exact: true })).toBeVisible();
   await expect(page.locator(".print-model-canvas canvas")).toBeVisible();
   await page.getByLabel("Orientação da cópia STL").selectOption("1");
@@ -146,4 +144,35 @@ test("resin keeps calibrated values, shows guided limits and supports mobile/Pre
   ).toBeVisible();
   await expect(page.locator(".print-result table")).toHaveCount(0);
   expect(errors).toEqual([]);
+});
+
+test("AI effort estimates refresh before generation and changing machine data resets consent", async ({
+  page,
+}) => {
+  let paidCalls = 0;
+  page.on("request", (r) => {
+    if (r.url().includes("/printing/ai")) paidCalls++;
+  });
+  await page.goto("/impressao-3d");
+  await page.getByLabel("Modelo da impressora").fill("Cost fixture");
+  await page.getByLabel(/Conferi os limites/).check();
+  const generate = page.getByRole("button", { name: "Analisar com IA" });
+  await expect(generate).toBeDisabled();
+  const first = page.waitForResponse(
+    (r) => r.url().endsWith("/api/ai/estimate") && r.status() === 200,
+  );
+  await page.getByLabel(/Autorizo enviar somente/).check();
+  const low = await (await first).json();
+  await expect(generate).toBeEnabled();
+  await expect(page.locator(".ai-quote")).toContainText("Reserva máxima");
+  const second = page.waitForResponse(
+    (r) => r.url().endsWith("/api/ai/estimate") && r.status() === 200,
+  );
+  await page.getByLabel("Esforço de raciocínio").selectOption("high");
+  const high = await (await second).json();
+  expect(high.maximum_credits).toBeGreaterThan(low.maximum_credits);
+  await page.getByLabel("Modelo da impressora").fill("Changed cost fixture");
+  await expect(page.getByLabel(/Autorizo enviar somente/)).not.toBeChecked();
+  await expect(generate).toBeDisabled();
+  expect(paidCalls).toBe(0);
 });

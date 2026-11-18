@@ -3,6 +3,7 @@ import "@gameforge/printing/style.css";
 import { api } from "./lib";
 import { Brand, Link } from "./ui";
 import { Footer } from "./Landing";
+const estimateAi = (input: unknown) => api("/ai/estimate",input);
 export default function Printing({
   standalone = false,
 }: {
@@ -10,12 +11,13 @@ export default function Printing({
 }) {
   const workbench = (
     <PrintWorkbench
+      estimateAi={estimateAi}
       generateAi={async (input) => {
         const result = await api("/account/printing/ai", input);
         window.dispatchEvent(new Event("data-updated"));
         return result;
       }}
-      aiHint="Claude Opus 5.5 com fallback OpenAI opcional. IA exige conta com assinatura paga ou licença manual válida e saldo disponível."
+      aiHint="Roteamento econômico, esforço ajustável e orçamento antes da chamada. IA exige conta com assinatura paga ou licença manual válida e saldo disponível."
     />
   );
   if (!standalone) return workbench;

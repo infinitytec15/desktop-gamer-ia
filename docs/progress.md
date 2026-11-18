@@ -107,3 +107,24 @@ Em 18/11, a verificação de presença retornou OpenAI não configurada. Foi sol
 
 
 Validação da atualização de provedores: 18 testes API passaram. E2E web: quatro fluxos passaram na bateria inicial; o teste de admin revelou uma premissa incorreta da fixture (ambiente local já tinha uma credencial de ambiente, sem chamada a ela). O teste passou a conferir ambas as origens suportadas, salvou/removeu apenas chave fictícia e passou ao repetir. Inclui campos limpos após salvar, disponibilidade do botão e ausência de overflow mobile. Build cloud passou. O total de verificações da versão passa a 93. Credenciais do host não foram usadas em chamadas.
+
+
+## Roteamento, esforço e cofre de cobrança — 18/11/2026
+
+Novo pedido: diagnosticar Anthropic HTTP 400 real; roteamento econômico e esforço selecionável com orçamento antes do uso; campos Mercado Pago e copiar webhook no admin; reforçar isolamento de segredos e testes de autorização. Fases: pesquisa de contratos/custos → cofre/versionamento/rotas → orçamento e cobrança por modelo → UI compartilhada → testes e publicação. Segredos permanecem no servidor; snapshots de configuração são cifrados. Nenhuma proteção é descrita como garantia absoluta contra invasão.
+
+
+Extensão do pedido: imagem SmartScreen e UAC, monitor com GPU/temperatura/gráficos e gestão administrativa de usuário/assinatura/créditos. Usuário informou não ter certificado de assinatura. Instalador 0.5 passa a perMachine/UAC e o build aceita thumbprint de certificado válido, com opção de exigir assinatura e verificação posterior. SmartScreen permanece dependente de assinatura/reputação; nenhuma proteção é desabilitada.
+
+Implementação 0.5: seis modelos com preços Standard pesquisados, três modos editáveis pelo admin, esforço low/medium/high, orçamento por contrato/entrada, hash vinculando consentimento ao orçamento e reserva incluindo fallback. Atualização de escolha/dados invalida a estimativa; campos de orçamento não executam IA. Cobrança pelo usage real/modelo; cliente não escolhe preços nem endpoint. Preservada a resposta de sistema antiga sem campos novos para clientes 0.4 estritos.
+
+Cofre: AES-256-GCM com IV aleatório e AAD por provedor/integração, compatibilidade de leitura com registros legados, snapshots cifrados e restauração transacional. Nenhum trecho de chave volta em GET, auditoria ou erro; os last_four legados foram mascarados pela migration 004. Mercado Pago permite token, segredo HMAC, vendedor e public key opcional, flags separadas de produção/habilitação, teste sem cobrança de token/vendedor e copiar webhook. Cobrança não é habilitada automaticamente ao salvar. Migration 005 adiciona concessões manuais e remoção de acesso; contratos Mercado Pago precisam ser encerrados antes da remoção do cadastro.
+
+Admin: editar cadastro, conceder/editar/remover assinatura manual, créditos positivos/negativos com motivo, bloquear/reativar e remover acesso. Créditos de concessão são idempotentes; licenças de usuário ficam vinculadas ao vencimento/status da concessão; revogar bloqueia o dispositivo online. Janela offline assinada de até 24h continua sendo um limite explícito.
+
+Monitor: amostras locais, gráficos em SVG com escala temporal real e lacunas para dados ausentes, CPU/frequência/núcleos, RAM/swap, rede e volumes; coleta de GPU em processo de leitura fixo com timeout/sem janela, fora da thread da UI. NVIDIA NVSMI real retornou GeForce RTX 4060, 20% de uso, 48,78 °C e 1420/8188 MB na leitura observada. Não é benchmark nem sensor simulado. Temperatura da CPU indisponível; LHM WMI é opcional e não instalado. Contadores WDDM são fallback sem inventar temperatura ou VRAM total.
+
+Verificação parcial: 50 verificações Rust, Clippy -D warnings, cargo check Tauri, builds desktop/cloud, dois Vitest, 11 impressão, dez E2E desktop e sete E2E web passaram. 21 testes API passaram antes da extensão de teste de restauração de chave; repetição final necessária. E2E de monitor usa fixture para validar desenho/estados; leitura GPU real é o exemplo monitor. Testes financeiros/LLM de integração usam transporte controlado, sem execução no PC/impressora nem cobrança Mercado Pago real. Causa Anthropic ainda sob investigação; teste de produção anterior foi HTTP 400, e OpenAI já teve teste real validado.
+
+
+Bateria local final 0.5: 101 verificações passaram (50 Rust, 21 API, 11 impressão, 2 Vitest, 10 E2E desktop e 7 E2E web). Inclui restauração de chave de provedor v2/AAD e ausência de fragmentos em GET. O teste de orçamento foi corrigido para usar origem de concessão única ao repetir em banco persistente; a proteção de carteira divergente permaneceu ativa. Builds desktop/cloud, Clippy e checagem Tauri passaram. NSIS release 4,44 MiB gerado; SHA256 9d71a2b96ca70907299a1f4ea1338fd8a3858e0366da6e91627a0890043cde46. Sem certificado fornecido, assinatura é NotSigned; UAC é solicitado pelo modo perMachine. Não foi instalado nesta máquina.

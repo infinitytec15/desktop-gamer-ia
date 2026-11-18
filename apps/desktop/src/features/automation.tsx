@@ -1,3 +1,5 @@
+import { AiControls, useAiQuote, type AiChoice } from "@gameforge/printing/ai";
+import "@gameforge/printing/style.css";
 import { notifyEvent } from "../lib/notifications";
 import { useState, useEffect } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
@@ -6,6 +8,7 @@ import type { OptimizationPlan } from "../generated/OptimizationPlan";
 import type { SystemAction } from "../generated/SystemAction";
 import type { Operation } from "../generated/Operation";
 import type { ObsState } from "../generated/ObsState";
+const estimateAi = (input: unknown) => invoke("estimate_ai", { input });
 const labels: Record<SystemAction, { title: string; effect: string }> = {
   enable_game_mode: {
     title: "Ativar Modo de Jogo",
@@ -68,10 +71,27 @@ export function OptimizePage({
   const [goal, setGoal] = useState("Jogar e transmitir com estabilidade");
   const [context, setContext] = useState<unknown>(null);
   const [fallback, setFallback] = useState(true);
+  const [choice, setChoice] = useState<AiChoice>({
+    mode: "economy",
+    effort: "low",
+  });
+  const aiBudget = useAiQuote(
+    estimateAi,
+    context
+      ? { task: "system", context, ...choice, allow_fallback: fallback }
+      : null,
+    !!context,
+  );
   const [selected, setSelected] = useState<SystemAction[]>([]);
   const [prepared, setPrepared] = useState<Operation | null>(null);
   const [result, setResult] = useState<Operation | null>(null);
-  function storeResult(op:Operation|null){setResult(op);if(op?.status==="applied")void notifyEvent("Operação concluída e verificada. Consulte o Histórico.");}
+  function storeResult(op: Operation | null) {
+    setResult(op);
+    if (op?.status === "applied")
+      void notifyEvent(
+        "Operação concluída e verificada. Consulte o Histórico.",
+      );
+  }
 
   function accept(p: OptimizationPlan) {
     setPlan(p);
@@ -90,8 +110,9 @@ export function OptimizePage({
       <section className="panel">
         <h2>Planejar a otimização</h2>
         <p className="muted">
-          Claude Opus 5.5 é o planejador principal. GPT-6.1 Sol pode assumir em
-          caso de falha. Os modelos propõem; você revisa e aprova.
+          Escolha o modo e o esforço. O roteamento usa modelos econômicos para
+          tarefas objetivas e modelos mais capazes para casos complexos. Você
+          revisa antes de aplicar.
         </p>
         <label className="field">
           Seu objetivo
@@ -139,7 +160,8 @@ export function OptimizePage({
             <p className="muted">
               CPU, memória, uso e espaço em disco. Chaves de API, chaves de
               transmissão, nomes de processos e caminhos pessoais são excluídos.
-              A consulta pode gerar cobrança nas suas APIs.
+              Preparar a análise consulta uma estimativa no servidor, sem chamar
+              os provedores. Gerar o plano consome créditos da sua conta.
             </p>
             <details open>
               <summary>Revisar JSON exato</summary>
@@ -151,16 +173,28 @@ export function OptimizePage({
                 checked={fallback}
                 onChange={(e) => setFallback(e.target.checked)}
               />
-              Permitir envio à OpenAI se o Claude falhar
+              Permitir fallback para o segundo modelo dentro da reserva indicada
             </label>
+            <AiControls
+              value={choice}
+              onChange={setChoice}
+              {...aiBudget}
+              disabled={w.busy || !!prepared}
+            />
             <button
               className="primary"
-              disabled={w.busy || !!prepared}
+              disabled={
+                w.busy || !!prepared || !aiBudget.quote || aiBudget.loading
+              }
               onClick={() =>
                 void w.run(async () =>
                   accept(
                     await invoke<OptimizationPlan>("generate_plan", {
                       allowFallback: fallback,
+                      options: {
+                        ...choice,
+                        quote_hash: aiBudget.quote?.quote_hash,
+                      },
                     }),
                   ),
                 )
@@ -298,9 +332,7 @@ export function CredentialsPage() {
         .then(setStatus)
         .catch(() => {});
   }, []);
-  const fields = [
-    ["obs_password", "Senha do WebSocket OBS"],
-  ];
+  const fields = [["obs_password", "Senha do WebSocket OBS"]];
   return (
     <section className="panel">
       <h2>Conexões e credenciais</h2>
@@ -376,7 +408,13 @@ export function StreamingPage({ plan }: { plan: OptimizationPlan | null }) {
   const [saved, setSaved] = useState<string[]>([]);
   const [confirmed, setConfirmed] = useState(false);
   const [result, setResult] = useState<Operation | null>(null);
-  function storeResult(op:Operation|null){setResult(op);if(op?.status==="applied")void notifyEvent("Operação concluída e verificada. Consulte o Histórico.");}
+  function storeResult(op: Operation | null) {
+    setResult(op);
+    if (op?.status === "applied")
+      void notifyEvent(
+        "Operação concluída e verificada. Consulte o Histórico.",
+      );
+  }
 
   useEffect(() => {
     if (isTauri())

@@ -156,6 +156,8 @@ export const proposalSchema = z.strictObject({
 });
 export type Proposal = z.infer<typeof proposalSchema>;
 export type PrintPlan = Proposal & {
+  credits_used?: number;
+  credits_reserved?: number;
   source: "local" | "anthropic" | "openai";
   model: string;
   warnings: string[];

@@ -1,3 +1,12 @@
+import { userManagement } from "./user-management.js";
+import {
+  paymentConfig,
+  paymentStatus,
+  savePayment,
+  restorePayment,
+} from "./integrations.js";
+import { estimate } from "./estimates.js";
+import { MODELS, routingSchema, routingSettings } from "./routing.js";
 import { accountActor, generatePrinting } from "./printing.js";
 import express, {
   type Request,
@@ -36,6 +45,7 @@ import {
   passwordCheck,
   constantEqual,
   encrypt,
+  decrypt,
   publicRaw,
   verifyWebhook,
 } from "./security.js";
@@ -50,6 +60,7 @@ import {
 
 import {
   billingReady,
+  mp,
   checkout,
   cancelSubscription,
   reconcileSubscription,
@@ -61,7 +72,7 @@ import { topupCheckout, reconcileTopup } from "./topups.js";
 
 import { transaction } from "./db.js";
 
-import { generatePlan, testProvider } from "./planner.js";
+import { generatePlan, testProvider, availableModels } from "./planner.js";
 
 const uuid = z.uuid();
 
@@ -138,7 +149,7 @@ export function createApp(pool: Pool, c: Config) {
     res.json({
       plans,
       packages,
-      billing_enabled: billingReady(c),
+      billing_enabled: billingReady(await paymentConfig(pool, c)),
       download_available: !!c.downloadUrl,
       download_url: c.downloadUrl || null,
     });
@@ -393,6 +404,15 @@ export function createApp(pool: Pool, c: Config) {
     res.json({ ok: true });
   });
 
+  app.post("/api/ai/estimate", async (req, res) => {
+    await rateLimit(pool, c, "ai-quote:" + req.ip, 60, 60);
+    res.json(await estimate(pool, req.body));
+  });
+  app.post("/api/desktop/ai/estimate", async (req, res) => {
+    await deviceAuth(pool, c, bearer(req));
+    await rateLimit(pool, c, "desktop-quote:" + req.ip, 60, 60);
+    res.json(await estimate(pool, req.body));
+  });
   app.post("/api/account/printing/ai", requireUser, async (req, res) => {
     await rateLimit(pool, c, "printing-ai:" + req.auth!.userId, 10, 60);
     res.json(
@@ -431,14 +451,15 @@ export function createApp(pool: Pool, c: Config) {
   });
 
   app.post("/api/webhooks/mercadopago", async (req, res) => {
+    const billing = await paymentConfig(pool, c);
     const dataId = req.query["data.id"];
     const signature = req.get("x-signature") || "",
       requestId = req.get("x-request-id") || "";
     if (
-      !c.mpWebhookSecret ||
+      !billing.mpWebhookSecret ||
       typeof dataId !== "string" ||
       !/^[a-zA-Z0-9_-]{1,80}$/.test(dataId) ||
-      !verifyWebhook(c.mpWebhookSecret, signature, requestId, dataId)
+      !verifyWebhook(billing.mpWebhookSecret, signature, requestId, dataId)
     )
       throw new HttpError(401, "Assinatura do webhook inválida");
     const topic = req.body?.type;
@@ -517,7 +538,7 @@ export function createApp(pool: Pool, c: Config) {
       .object({ status: z.enum(["active", "blocked"]) })
       .parse(req.body);
     const result = await pool.query(
-      "UPDATE users SET status=$2 WHERE id=$1 RETURNING id",
+      "UPDATE users SET status=$2 WHERE id=$1 AND status<>'deleted' RETURNING id",
       [id(req), status],
     );
     if (!result.rows.length) throw new HttpError(404, "Usuário não localizado");
@@ -536,6 +557,21 @@ export function createApp(pool: Pool, c: Config) {
     ),
   );
 
+  app.post("/api/admin/subscriptions/:id/cancel", async (req, res) => {
+    const subscriptionId = id(req);
+    await rateLimit(pool, c, "admin:cancel-subscription", 20, 300);
+    const row = (
+      await pool.query("SELECT user_id FROM subscriptions WHERE id=$1", [
+        subscriptionId,
+      ])
+    ).rows[0];
+    if (!row) throw new HttpError(404, "Assinatura não localizada");
+    await cancelSubscription(pool, c, row.user_id, subscriptionId);
+    await audit(pool, "admin", "billing.cancelled_by_admin", {
+      id: subscriptionId,
+    });
+    res.json({ ok: true });
+  });
   app.post("/api/admin/subscriptions/:id/sync", async (req, res) => {
     const row = (
       await pool.query("SELECT provider_id FROM subscriptions WHERE id=$1", [
@@ -782,30 +818,37 @@ export function createApp(pool: Pool, c: Config) {
 
   app.get("/api/admin/config", async (_req, res) => {
     const saved = (
-      await pool.query(
-        "SELECT provider,last_four,updated_at FROM provider_credentials",
-      )
+      await pool.query("SELECT provider,updated_at FROM provider_credentials")
     ).rows;
     const tests = (
       await pool.query(
         "SELECT metadata FROM audit_log WHERE event='provider.tested' ORDER BY id DESC LIMIT 10",
       )
     ).rows;
+    const modelChecks = (
+      await pool.query(
+        "SELECT metadata FROM audit_log WHERE event='provider.models_checked' ORDER BY id DESC LIMIT 10",
+      )
+    ).rows;
     res.json({
       app_url: c.appUrl,
       public_key: publicRaw(c.privateKey),
-      billing_enabled: billingReady(c),
-      mercadopago: {
-        token: !!c.mpToken,
-        webhook: !!c.mpWebhookSecret,
-        collector: !!c.mpCollectorId,
-        live_mode: c.mpLiveMode,
-      },
+      billing_enabled: billingReady(await paymentConfig(pool, c)),
+      mercadopago: await paymentStatus(pool, c),
+      routing: await routingSettings(pool),
+      ai_models: MODELS,
       download_url: c.downloadUrl,
       providers: ["anthropic", "openai"].map((provider) => ({
         provider,
-        last_four:
-          saved.find((s) => s.provider === provider)?.last_four || null,
+        stored: saved.some((s) => s.provider === provider),
+        model_check:
+          modelChecks.find((r) => r.metadata.provider === provider)?.metadata ||
+          null,
+        configured:
+          saved.some((s) => s.provider === provider) ||
+          !!process.env[
+            provider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY"
+          ],
         environment:
           !!process.env[
             provider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY"
@@ -815,17 +858,65 @@ export function createApp(pool: Pool, c: Config) {
           null,
       })),
       models: {
-        anthropic: process.env.ANTHROPIC_MODEL || "claude-opus-5-5",
-        openai: process.env.OPENAI_MODEL || "gpt-6.1-sol",
+        anthropic: Object.hasOwn(
+          MODELS,
+          process.env.ANTHROPIC_MODEL || "claude-opus-5-5",
+        )
+          ? process.env.ANTHROPIC_MODEL || "claude-opus-5-5"
+          : "Modelo inválido no ambiente",
+        openai: Object.hasOwn(MODELS, process.env.OPENAI_MODEL || "gpt-6.1-sol")
+          ? process.env.OPENAI_MODEL || "gpt-6.1-sol"
+          : "Modelo inválido no ambiente",
       },
     });
   });
 
+  app.post("/api/admin/mercadopago", async (req, res) => {
+    await rateLimit(pool, c, "admin:payment-config", 10, 300);
+    await savePayment(pool, c, req.body);
+    res.json(await paymentStatus(pool, c));
+  });
+  app.post("/api/admin/mercadopago/restore", async (_req, res) => {
+    await restorePayment(pool, c);
+    res.json(await paymentStatus(pool, c));
+  });
+  app.post("/api/admin/mercadopago/test", async (_req, res) => {
+    await rateLimit(pool, c, "admin:payment-test", 3, 300);
+    const config = await paymentConfig(pool, c);
+    const account = await mp(config, "/users/me");
+    if (String(account.id) !== config.mpCollectorId)
+      throw new HttpError(
+        400,
+        "O token não pertence ao ID do vendedor configurado.",
+      );
+    await audit(pool, "admin", "payment.credential_verified");
+    res.json({
+      ok: true,
+      message:
+        "Token e vendedor conferidos. Webhook e cobrança precisam de homologação de pagamento; nenhuma cobrança foi criada.",
+    });
+  });
+  app.post("/api/admin/ai/routing", async (req, res) => {
+    const value = routingSchema.parse(req.body);
+    await pool.query(
+      "INSERT INTO ai_routing_settings(id,config) VALUES(true,$1) ON CONFLICT(id) DO UPDATE SET config=excluded.config,updated_at=now()",
+      [JSON.stringify(value)],
+    );
+    await audit(pool, "admin", "ai.routing_updated", value);
+    res.json({ ok: true });
+  });
   app.post("/api/admin/providers/:provider/test", async (req, res) => {
     const provider = z.enum(["anthropic", "openai"]).parse(req.params.provider);
     await rateLimit(pool, c, "provider-test:" + provider, 3, 300);
     const result = await testProvider(pool, c, provider);
     await audit(pool, "admin", "provider.tested", result);
+    res.json(result);
+  });
+  app.post("/api/admin/providers/:provider/models", async (req, res) => {
+    const provider = z.enum(["anthropic", "openai"]).parse(req.params.provider);
+    await rateLimit(pool, c, "provider-models:" + provider, 10, 300);
+    const result = await availableModels(pool, c, provider);
+    await audit(pool, "admin", "provider.models_checked", result);
     res.json(result);
   });
 
@@ -834,20 +925,73 @@ export function createApp(pool: Pool, c: Config) {
       { key } = z
         .object({ key: z.string().trim().min(20).max(2400) })
         .parse(req.body);
-    await pool.query(
-      "INSERT INTO provider_credentials(provider,encrypted_value,last_four) VALUES($1,$2,$3) ON CONFLICT(provider) DO UPDATE SET encrypted_value=excluded.encrypted_value,last_four=excluded.last_four,updated_at=now()",
-      [provider, encrypt(key, c.encryptionKey), key.slice(-4)],
-    );
+    await transaction(pool, async (db) => {
+      await db.query("SELECT pg_advisory_xact_lock(57369106)");
+      const old = (
+        await db.query(
+          "SELECT encrypted_value FROM provider_credentials WHERE provider=$1 FOR UPDATE",
+          [provider],
+        )
+      ).rows[0];
+      await db.query(
+        "INSERT INTO credential_history(name,encrypted_before) VALUES($1,$2)",
+        ["provider:" + provider, old?.encrypted_value || null],
+      );
+      await db.query(
+        "INSERT INTO provider_credentials(provider,encrypted_value,last_four) VALUES($1,$2,'****') ON CONFLICT(provider) DO UPDATE SET encrypted_value=excluded.encrypted_value,last_four='****',updated_at=now()",
+        [provider, encrypt(key, c.encryptionKey, "provider:" + provider)],
+      );
+    });
     await audit(pool, "admin", "provider.updated", { provider });
     res.json({ ok: true });
   });
 
   app.delete("/api/admin/providers/:provider", async (req, res) => {
     const provider = z.enum(["anthropic", "openai"]).parse(req.params.provider);
-    await pool.query("DELETE FROM provider_credentials WHERE provider=$1", [
-      provider,
-    ]);
+    await transaction(pool, async (db) => {
+      await db.query("SELECT pg_advisory_xact_lock(57369106)");
+      const old = (
+        await db.query(
+          "SELECT encrypted_value FROM provider_credentials WHERE provider=$1 FOR UPDATE",
+          [provider],
+        )
+      ).rows[0];
+      if (old)
+        await db.query(
+          "INSERT INTO credential_history(name,encrypted_before) VALUES($1,$2)",
+          ["provider:" + provider, old.encrypted_value],
+        );
+      await db.query("DELETE FROM provider_credentials WHERE provider=$1", [
+        provider,
+      ]);
+    });
     await audit(pool, "admin", "provider.removed", { provider });
+    res.json({ ok: true });
+  });
+  app.post("/api/admin/providers/:provider/restore", async (req, res) => {
+    const provider = z.enum(["anthropic", "openai"]).parse(req.params.provider);
+    await transaction(pool, async (db) => {
+      await db.query("SELECT pg_advisory_xact_lock(57369106)");
+      const old = (
+        await db.query(
+          "SELECT id,encrypted_before FROM credential_history WHERE name=$1 ORDER BY id DESC LIMIT 1 FOR UPDATE",
+          ["provider:" + provider],
+        )
+      ).rows[0];
+      if (!old) throw new HttpError(404, "Não há versão anterior da chave");
+      if (old.encrypted_before) {
+        decrypt(old.encrypted_before, c.encryptionKey, "provider:" + provider);
+        await db.query(
+          "INSERT INTO provider_credentials(provider,encrypted_value,last_four) VALUES($1,$2,'****') ON CONFLICT(provider) DO UPDATE SET encrypted_value=excluded.encrypted_value,last_four='****',updated_at=now()",
+          [provider, old.encrypted_before],
+        );
+      } else
+        await db.query("DELETE FROM provider_credentials WHERE provider=$1", [
+          provider,
+        ]);
+      await db.query("DELETE FROM credential_history WHERE id=$1", [old.id]);
+    });
+    await audit(pool, "admin", "provider.restored", { provider });
     res.json({ ok: true });
   });
 
@@ -871,6 +1015,8 @@ export function createApp(pool: Pool, c: Config) {
     await audit(pool, "admin", "webhook.retry", { id: eventId });
     res.json({ ok: true });
   });
+
+  userManagement(app, pool, c);
 
   app.use("/api", (_req, _res, next) =>
     next(new HttpError(404, "Recurso não encontrado")),

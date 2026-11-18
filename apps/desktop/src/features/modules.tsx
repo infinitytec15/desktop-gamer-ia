@@ -1,8 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { Activity, RefreshCw, ShieldCheck, Undo2 } from "lucide-react";
+import { RefreshCw, ShieldCheck, Undo2 } from "lucide-react";
 import type { Game } from "../generated/Game";
-import type { Metrics } from "../generated/Metrics";
 import type { Probe } from "../generated/Probe";
 import type { Report, Snapshot } from "../domain";
 function useRequest<T>(command: string) {
@@ -136,105 +135,7 @@ export function NetworkPage() {
     </section>
   );
 }
-export function MonitorPage() {
-  const [samples, setSamples] = useState<Metrics[]>([]),
-    [error, setError] = useState(""),
-    [running, setRunning] = useState(false);
-  useEffect(() => {
-    if (!running) return;
-    let active = true,
-      inflight = false;
-    const sample = async () => {
-      if (inflight) return;
-      inflight = true;
-      try {
-        const m = await invoke<Metrics>("monitor_sample");
-        if (active) setSamples((s) => [...s.slice(-59), m]);
-      } catch (e) {
-        if (active) {
-          setError(String(e));
-          setRunning(false);
-        }
-      } finally {
-        inflight = false;
-      }
-    };
-    void sample();
-    const timer = setInterval(() => void sample(), 1000);
-    return () => {
-      active = false;
-      clearInterval(timer);
-    };
-  }, [running]);
-  const current = samples.at(-1);
-  return (
-    <section className="panel">
-      <h2>Monitor em tempo real</h2>
-      <p className="muted">
-        Uma amostra por segundo, até 60 amostras nesta tela. A primeira amostra
-        de CPU é descartada visualmente até a seguinte leitura.
-      </p>
-      <button
-        className="secondary"
-        onClick={() => {
-          if (!isTauri()) {
-            setError("Abra o aplicativo desktop para ler as métricas.");
-            return;
-          }
-          setError("");
-          setRunning((s) => !s);
-        }}
-      >
-        <Activity size={16} />
-        {running ? "Pausar" : "Iniciar monitor"}
-      </button>
-      <ErrorMessage text={error} />
-      <div className="monitor-metrics">
-        <div>
-          <span>Uso de CPU</span>
-          <strong>
-            {current && samples.length > 1
-              ? `${current.cpu_usage.toFixed(1)}%`
-              : "—"}
-          </strong>
-        </div>
-        <div>
-          <span>RAM utilizada</span>
-          <strong>
-            {current
-              ? `${current.memory_used_gb.toFixed(1)} / ${current.memory_total_gb.toFixed(1)} GB`
-              : "—"}
-          </strong>
-        </div>
-      </div>
-      <div
-        className="chart"
-        role="img"
-        aria-label="Uso de CPU nas últimas amostras"
-      >
-        <svg viewBox="0 0 600 140" preserveAspectRatio="none">
-          <line x1="0" y1="139" x2="600" y2="139" stroke="#343b4b" />
-          <polyline
-            points={samples
-              .slice(1)
-              .map(
-                (s, i) =>
-                  `${(i * 600) / 58},${139 - Math.min(100, Math.max(0, s.cpu_usage)) * 1.38}`,
-              )
-              .join(" ")}
-            fill="none"
-            stroke="#ad98ff"
-            strokeWidth="2"
-          />
-        </svg>
-      </div>
-      <p className="muted">
-        GPU, FPS e sensores específicos não são inferidos a partir do uso da
-        CPU.
-      </p>
-    </section>
-  );
-}
+export { MonitorPage } from "./monitor";
 export function ObsPage() {
   const q = useRequest<Probe>("obs_status");
   return (

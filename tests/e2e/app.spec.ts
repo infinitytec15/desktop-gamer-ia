@@ -299,3 +299,71 @@ test("program inventory opens a goal questionnaire without automatic changes", a
     "Solicitação registrada",
   );
 });
+
+test("monitor plots CPU RAM GPU temperature and handles unavailable sensors", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("gameforge.onboarding.v1", "done");
+    Object.defineProperty(window, "isTauri", { value: true });
+    Object.defineProperty(window, "__TAURI_INTERNALS__", {
+      value: {
+        invoke: async (cmd: string) => {
+          if (cmd !== "monitor_sample") throw new Error("Unexpected command");
+          return {
+            cpu_usage: 24,
+            memory_used_gb: 8,
+            memory_total_gb: 16,
+            timestamp_ms: Date.now(),
+            per_core_usage: [20, 28],
+            cpu_frequency_mhz: 4200,
+            swap_used_gb: 1,
+            swap_total_gb: 8,
+            uptime_seconds: 3600,
+            network_receive_mbps: 2,
+            network_transmit_mbps: 0.5,
+            disks: [
+              {
+                name: "Fixture volume",
+                total_gb: 100,
+                available_gb: 30,
+                kind: "SSD",
+              },
+            ],
+            sensors: [],
+            gpus: [
+              {
+                name: "Fixture GPU",
+                usage_percent: 40,
+                temperature_c: 65,
+                memory_used_mb: 1000,
+                memory_total_mb: 8000,
+                power_w: null,
+                source: "Test fixture",
+              },
+            ],
+            hardware_sampled_at_ms: Date.now(),
+            warnings: ["Fixture CPU sensor unavailable"],
+          };
+        },
+      },
+    });
+  });
+  await page.goto("/#monitor");
+  await page.getByRole("button", { name: "Iniciar monitor" }).click();
+  await expect(
+    page.getByText("Fixture GPU", { exact: true }).first(),
+  ).toBeVisible();
+  await expect(
+    page.locator(".telemetry-chart path[d^='M']").first(),
+  ).toBeAttached();
+  await expect(page.getByText("Fixture CPU sensor unavailable")).toBeVisible();
+  await expect(page.locator(".telemetry-device")).toContainText("65 °C");
+  await expect(page.getByText("Fixture volume · SSD")).toBeVisible();
+  await page.getByRole("button", { name: "Pausar", exact: true }).click();
+  await expect(page.getByText(/Monitor pausado/)).toBeVisible();
+  await page.screenshot({
+    path: ".impeccable/review/monitor-desktop.png",
+    fullPage: true,
+  });
+});

@@ -39,6 +39,8 @@ export async function migrate(pool: Pool, config: Config) {
       "001_initial.sql",
       "002_lookup_indexes.sql",
       "003_printing_jobs.sql",
+      "004_integration_vault.sql",
+      "005_manual_subscriptions.sql",
     ]) {
       const version = filename.split("_")[0];
       const sql = await readFile(
