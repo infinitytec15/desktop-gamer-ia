@@ -6,11 +6,18 @@ on:
         description: Existing release tag
         required: true
         default: v0.6.0
+      runner:
+        description: macOS build host
+        type: choice
+        options:
+          - macos-15-intel
+          - macos-latest
+        default: macos-15-intel
 permissions:
   contents: write
 jobs:
   macos:
-    runs-on: macos-latest
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 40
     env:
       APPLE_SIGNING_IDENTITY: '-'
