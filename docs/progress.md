@@ -146,3 +146,6 @@ Cofre legado: ao usar uma credencial AES-GCM antiga, o servidor a recifra com AA
 
 
 As verificações adicionais de opt-out legado/restauração de roteamento e recifra de segredo legado passaram; API soma 23 testes, total local 103. Build cloud/API final passou. CI de bb9369a passou em cloud, frontend, Rust Windows e Rust macOS. Guard de GF_REQUIRE_SIGNING foi executado sem certificado e bloqueou o build conforme esperado, sem instalar/alterar o Windows. Auditoria de dependências de produção retornou zero vulnerabilidades; alertas de desenvolvimento continuam registrados separadamente.
+
+
+Configuração solicitada pelo operador aplicada e lida novamente em produção após o deploy 2279dac: somente OpenAI nos três modos (Luna/Terra/Sol), com fallback entre modelos OpenAI quando autorizado e sem fallback no Avançado. Snapshot cifrado de roteamento disponível no admin. Consulta de modelos, sem geração paga adicional, verificou as duas chaves e concluiu recifra dos registros legados; ambos os provedores retornaram stored=true/context_bound=true. Nenhuma chave ou sufixo foi retornado. Novas estimativas dos três modos apontaram apenas modelos gpt-*. A chave Anthropic foi preservada; sua geração continua dependente de saldo na API.
