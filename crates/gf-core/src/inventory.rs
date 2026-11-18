@@ -21,6 +21,24 @@ fn adapter(name: &str) -> String {
     let n = name.to_lowercase();
     if n.contains("obs studio") {
         "obs"
+    } else if [
+        "bambu studio",
+        "bambustudio",
+        "orcaslicer",
+        "orca-flashforge",
+        "flashprint",
+        "creality print",
+        "elegooslicer",
+        "chitubox",
+        "lychee",
+        "photon workshop",
+        "prusaslicer",
+        "superslicer",
+    ]
+    .iter()
+    .any(|name| n.contains(name))
+    {
+        "printing"
     } else if n.contains("discord") {
         "discord"
     } else {
@@ -120,6 +138,8 @@ mod tests {
     #[test]
     fn adapters_never_imply_arbitrary_automation() {
         assert_eq!(adapter("OBS Studio"), "obs");
+        assert_eq!(adapter("Bambu Studio"), "printing");
+        assert_eq!(adapter("CHITUBOX Basic"), "printing");
         assert_eq!(adapter("Unknown editor"), "guided");
         let app = make(
             "private-local-path",

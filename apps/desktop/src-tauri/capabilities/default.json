@@ -36,6 +36,8 @@
     "allow-obs-auto-connect",
     "allow-license-status",
     "allow-license-activate",
-    "allow-license-deactivate"
+    "allow-license-deactivate",
+    "allow-printing-ai",
+    "allow-save-print-artifact"
   ]
 }

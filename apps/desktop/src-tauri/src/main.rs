@@ -295,6 +295,27 @@ async fn license_deactivate() -> Result<(), String> {
         .await
         .map_err(|e| e.to_string())?
 }
+#[tauri::command]
+async fn printing_ai(input: serde_json::Value) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        gf_core::cloud::printing(&input).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn save_print_artifact(name: String, base64_data: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        gf_core::printing::save(
+            &PreferenceStore::new(gf_core::data_dir()),
+            &name,
+            &base64_data,
+        )
+        .map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.get(1).is_some_and(|s| s == "--system-helper") {
@@ -350,6 +371,8 @@ fn main() {
         .manage(Mutex::new(gf_core::diagnostics::Monitor::default()))
         .manage(Mutex::new(PreferenceStore::new(gf_core::data_dir())))
         .invoke_handler(tauri::generate_handler![
+            printing_ai,
+            save_print_artifact,
             license_status,
             license_activate,
             license_deactivate,

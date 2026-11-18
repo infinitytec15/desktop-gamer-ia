@@ -1,3 +1,4 @@
+import "@gameforge/printing/style.css";
 import { lazy, Suspense, useEffect, useRef } from "react";
 import { gsap } from "gsap";
 import {
@@ -70,6 +71,10 @@ export function Plans({
             <li>
               <Check />
               Configuração de perfil do OBS
+            </li>
+            <li>
+              <Check />
+              Planejamento de impressão 3D
             </li>
             <li>
               <Check />
@@ -161,6 +166,7 @@ export function Landing({
         <nav aria-label="Principal">
           <a href="#como-funciona">Como funciona</a>
           <a href="#recursos">Seu setup</a>
+          <a href="#impressao-3d">Impressão 3D</a>
           <a href="#planos">Planos</a>
         </nav>
         <div className="header-actions">
@@ -396,6 +402,135 @@ export function Landing({
                 <span className="feature-meta">DIAGNÓSTICO</span>
               </article>
             </div>
+          </div>
+        </section>
+        <section
+          id="impressao-3d"
+          className="section wrap print-public-section"
+        >
+          <div>
+            <h2>
+              Do setup à peça.
+              <br />
+              FDM e resina, com critério.
+            </h2>
+            <p>
+              Prepare temperatura, velocidade, camada e suportes a partir dos
+              limites da sua impressora e do material. Veja a peça em 3D e
+              revise cada parâmetro antes de levar a cópia ao fatiador.
+            </p>
+            <ul className="print-public-points">
+              <li>
+                <Check />
+                Catálogo com mais de 160 nomes de modelos FDM, de Bambu Lab,
+                Creality, Flashforge, Elegoo e outras marcas, além de
+                configuração personalizada.
+              </li>
+              <li>
+                <Check />
+                STL analisado localmente: dimensões, bordas abertas, volume
+                quando consistente e cópia com orientação escolhida.
+              </li>
+              <li>
+                <Check />
+                Cópias estruturais de presets JSON, Cura ZIP e Prusa INI. Resina
+                e formatos proprietários têm aplicação guiada, com unidades
+                explícitas.
+              </li>
+            </ul>
+            <Link to="/impressao-3d" className="button primary">
+              Explorar impressão 3D
+              <ArrowUpRight size={18} />
+            </Link>
+            <div className="print-public-chips">
+              {[
+                "Bambu Lab",
+                "Creality",
+                "Flashforge",
+                "Elegoo",
+                "Anycubic",
+                "Prusa",
+                "FDM / FFF",
+                "SLA / MSLA / DLP",
+              ].map((s) => (
+                <span key={s}>{s}</span>
+              ))}
+            </div>
+          </div>
+          <div className="print-public-art">
+            <svg
+              viewBox="0 0 470 370"
+              aria-label="Ilustração de uma peça construída em camadas"
+            >
+              <defs>
+                <linearGradient id="print-material" x1="0" y1="0" x2="1" y2="1">
+                  <stop stopColor="#a986db" />
+                  <stop offset="1" stopColor="#4c346b" />
+                </linearGradient>
+                <pattern
+                  id="print-grid"
+                  width="30"
+                  height="18"
+                  patternUnits="userSpaceOnUse"
+                >
+                  <path
+                    d="M0 0H30M0 0V18"
+                    stroke="#77568e"
+                    strokeOpacity=".15"
+                    fill="none"
+                  />
+                </pattern>
+              </defs>
+              <path
+                d="m40 260 195-110 195 110-195 110z"
+                fill="url(#print-grid)"
+                stroke="#84629f"
+                strokeOpacity=".3"
+              />
+              {Array.from({ length: 15 }, (_, i) => (
+                <g key={i} transform={"translate(0 " + -i * 9 + ")"}>
+                  <path
+                    d="m130 246 105-58 105 58-105 58z"
+                    fill="url(#print-material)"
+                    fillOpacity={0.5 + i * 0.025}
+                    stroke="#c3a1e7"
+                    strokeOpacity=".3"
+                  />
+                  <path
+                    d="m130 246 105 58 105-58v7l-105 58-105-58z"
+                    fill="#5d407b"
+                    stroke="#a17ac6"
+                    strokeOpacity=".23"
+                  />
+                </g>
+              ))}
+              <path
+                d="m235 187 0-126 105 59"
+                stroke="#ceb0e6"
+                strokeDasharray="4 6"
+                strokeOpacity=".4"
+                fill="none"
+              />
+              <path
+                d="m235 61 85-47 85 47-85 46z"
+                stroke="#a989c9"
+                strokeOpacity=".4"
+                fill="#201b2a"
+              />
+              <text
+                x="320"
+                y="67"
+                textAnchor="middle"
+                fill="#b49acb"
+                fontSize="11"
+                fontFamily="Inter, sans-serif"
+              >
+                FDM · Resina
+              </text>
+            </svg>
+            <span>
+              Ilustração de camadas · sem estimativa de tempo ou ganho
+            </span>
           </div>
         </section>
         <section id="planos" className="section wrap pricing-section">

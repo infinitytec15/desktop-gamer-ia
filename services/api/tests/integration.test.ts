@@ -15,6 +15,8 @@ import { createLicense, activate, deviceAuth } from "../src/license.js";
 import { grant, wallet, reserve, MICRO, settle } from "../src/credits.js";
 import { reconcileInvoice, checkout } from "../src/billing.js";
 import { generatePlan } from "../src/planner.js";
+import { generatePrinting, accountActor } from "../src/printing.js";
+import { briefSchema, localPlan } from "@gameforge/printing";
 const enabled = !!process.env.TEST_DATABASE_URL;
 const integration = enabled ? test : test.skip;
 const privateKey = generateKeyPairSync("ed25519")
@@ -503,6 +505,124 @@ integration(
       await assert.rejects(() => checkout(pool, c, u.id, "core"), /Já existe/);
     } finally {
       globalThis.fetch = realFetch;
+    }
+  },
+);
+
+integration(
+  "printing uses the same wallet, validates constraints, deduplicates by input and rejects unpaid access",
+  async () => {
+    const u = await user();
+    await assert.rejects(() => accountActor(pool, u.id));
+    await createLicense(
+      pool,
+      c,
+      { userId: u.id, planId: "core", source: "manual", days: 5 },
+      "fixture",
+    );
+    await transaction(pool, (db) =>
+      grant(db, "user:" + u.id, "printing-fixture:" + u.id, 500, true),
+    );
+    const actor = await accountActor(pool, u.id);
+    const brief = briefSchema.parse({
+      technology: "fdm",
+      slicer: "bambu",
+      printer: "Fixture printer",
+      material: "PLA",
+      goal: "quality",
+      problem: "none",
+      notes: "",
+      build_volume: [220, 220, 250],
+      limits_confirmed: true,
+      nozzle: 0.4,
+      line_width: 0.45,
+      max_nozzle: 260,
+      max_bed: 80,
+      material_min: 190,
+      material_max: 230,
+      max_flow: 8,
+      current: {
+        layer_height: 0.2,
+        nozzle_temperature: 210,
+        bed_temperature: 60,
+        outer_speed: 45,
+        inner_speed: 65,
+        first_layer_speed: 20,
+        walls: 2,
+        infill: 15,
+        fan: 100,
+        supports: true,
+        brim: 0,
+      },
+    });
+    const p = localPlan(brief);
+    let calls = 0,
+      unsafe = false;
+    process.env.ANTHROPIC_API_KEY = "fixture-printing-provider-key";
+    process.env.ANTHROPIC_MODEL = "claude-opus-5-5";
+    globalThis.fetch = async (input, init) => {
+      if (String(input) === "https://api.anthropic.com/v1/messages") {
+        calls++;
+        const sent = JSON.parse(String(init?.body));
+        assert.equal(sent.tools[0].name, "submit_plan");
+        assert.ok(!JSON.stringify(sent).includes("STL_BINARY_CONTENT"));
+        return Response.json({
+          usage: { input_tokens: 1000, output_tokens: 1000 },
+          content: [
+            {
+              type: "tool_use",
+              name: "submit_plan",
+              input: {
+                summary: p.summary,
+                rationale: p.rationale,
+                calibration: p.calibration,
+                fdm: {
+                  ...p.fdm,
+                  ...(unsafe ? { nozzle_temperature: 400 } : {}),
+                },
+                resin: null,
+              },
+            },
+          ],
+        });
+      }
+      return realFetch(input, init);
+    };
+    const input = {
+      request_id: randomUUID(),
+      allow_fallback: false,
+      brief,
+      geometry: null,
+    };
+    try {
+      const plan = await generatePrinting(pool, c, actor, input);
+      assert.equal(plan.source, "anthropic");
+      await generatePrinting(pool, c, actor, input);
+      assert.equal(calls, 1);
+      assert.equal((await wallet(pool, "user:" + u.id)).balance, 476);
+      await assert.rejects(
+        () =>
+          generatePrinting(pool, c, actor, {
+            ...input,
+            brief: { ...brief, notes: "different input" },
+          }),
+        /Identificador/,
+      );
+      unsafe = true;
+      await assert.rejects(
+        () =>
+          generatePrinting(pool, c, actor, {
+            ...input,
+            request_id: randomUUID(),
+          }),
+        /não entregou/,
+      );
+      assert.equal((await wallet(pool, "user:" + u.id)).balance, 452);
+      const denied = await post("/account/printing/ai", input);
+      assert.equal(denied.status, 401);
+    } finally {
+      globalThis.fetch = realFetch;
+      delete process.env.ANTHROPIC_API_KEY;
     }
   },
 );

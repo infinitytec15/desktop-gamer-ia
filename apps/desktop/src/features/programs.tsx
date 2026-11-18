@@ -183,6 +183,7 @@ export function ProgramsPage({
                 <button
                   className="secondary"
                   onClick={() => {
+                    if(a.adapter==="printing"){location.hash="printing";return;}
                     setApp(a);
                     setCreated(null);
                   }}

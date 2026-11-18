@@ -1,11 +1,12 @@
 {
   "name": "gameforge",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "workspaces": [
     "apps/desktop",
     "apps/web",
-    "services/api"
+    "services/api",
+    "packages/printing"
   ],
   "scripts": {
     "dev": "npm run dev -w @gameforge/desktop",
@@ -25,7 +26,9 @@
     "build:cloud": "npm run web:build && npm run api:build",
     "installer:debug": "npm run tauri -w @gameforge/desktop -- build --debug --bundles nsis",
     "e2e:web": "playwright test --config playwright.web.config.ts",
-    "cloud:sync-desktop": "node scripts/sync-desktop-target.mjs"
+    "cloud:sync-desktop": "node scripts/sync-desktop-target.mjs",
+    "printing:build": "npm run build -w @gameforge/printing",
+    "printing:test": "npm run test -w @gameforge/printing"
   },
   "engines": {
     "node": ">=22"

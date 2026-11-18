@@ -35,7 +35,11 @@ export async function migrate(pool: Pool, config: Config) {
     await db.query(
       "CREATE TABLE IF NOT EXISTS schema_migrations(version text PRIMARY KEY,checksum text NOT NULL)",
     );
-    for (const filename of ["001_initial.sql", "002_lookup_indexes.sql"]) {
+    for (const filename of [
+      "001_initial.sql",
+      "002_lookup_indexes.sql",
+      "003_printing_jobs.sql",
+    ]) {
       const version = filename.split("_")[0];
       const sql = await readFile(
         fileURLToPath(new URL("../migrations/" + filename, import.meta.url)),

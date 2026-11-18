@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-save-print-artifact"
+description = "Enables the save_print_artifact command without any pre-configured scope."
+commands.allow = ["save_print_artifact"]
+
+[[permission]]
+identifier = "deny-save-print-artifact"
+description = "Denies the save_print_artifact command without any pre-configured scope."
+commands.deny = ["save_print_artifact"]

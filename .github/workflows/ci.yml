@@ -26,6 +26,7 @@ jobs:
       - run: npm ci
       - run: npm run build:cloud
       - run: npm run api:test
+      - run: npm run printing:test
   frontend:
     runs-on: windows-latest
     steps:

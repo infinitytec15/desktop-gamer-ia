@@ -1,4 +1,4 @@
-import {LicensePage} from "./features/license";
+import { LicensePage } from "./features/license";
 import {
   WelcomePage,
   NotificationSettings,
@@ -24,10 +24,11 @@ import "@fontsource/inter/latin-400.css";
 import "@fontsource/inter/latin-500.css";
 import "@fontsource/inter/latin-600.css";
 import "@fontsource/inter/latin-700.css";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import {
+  Printer,
   Activity,
   ArrowRight,
   AudioLines,
@@ -49,10 +50,12 @@ import {
 } from "lucide-react";
 import type { Report } from "./domain";
 import "./style.css";
+const PrintingPage = lazy(() => import("./features/printing"));
 const navigation = [
   { id: "home", label: "Visão geral", icon: LayoutDashboard },
   { id: "programs", label: "Programas", icon: AppWindow },
   { id: "requests", label: "Solicitações", icon: ClipboardCheck },
+  { id: "printing", label: "Impressão 3D", icon: Printer },
   { id: "boost", label: "Quick Boost", icon: Zap },
   { id: "games", label: "Jogos", icon: Gamepad2 },
   { id: "obs", label: "Streaming", icon: Radio },
@@ -385,6 +388,10 @@ function App() {
               <OptimizePage plan={aiPlan} setPlan={setAiPlan} />{" "}
               <StreamingPage plan={aiPlan} /> <DiscordPage />{" "}
             </>
+          ) : route === "printing" ? (
+            <Suspense fallback={<p role="status">Preparando impressão 3D…</p>}>
+              <PrintingPage />
+            </Suspense>
           ) : route === "settings" ? (
             <>
               <LicensePage />

@@ -1,0 +1,35 @@
+{
+  "name": "@gameforge/printing",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/Workbench.d.ts",
+      "default": "./dist/Workbench.js"
+    },
+    "./style.css": "./src/style.css"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "tsx --test tests/*.test.ts"
+  },
+  "dependencies": {
+    "zod": "^4.0.0",
+    "fflate": "^0.8.2",
+    "three": "^0.180.0"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/three": "^0.180.0",
+    "typescript": "~5.7.3",
+    "tsx": "^4.20.0"
+  }
+}

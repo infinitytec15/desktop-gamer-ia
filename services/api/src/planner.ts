@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { Pool } from "pg";
 import type { Config } from "./config.js";
@@ -147,13 +148,36 @@ export function usageCost(
   );
 }
 
+export type AiActor = {
+  deviceId: string | null;
+  licenseId: string | null;
+  walletKey: string;
+};
+export type AiTask = {
+  kind: "system" | "printing";
+  schema: Record<string, unknown>;
+  instructions: string;
+  parse: (v: unknown) => Record<string, unknown>;
+  warnings: string[];
+};
+const systemTask: AiTask = {
+  kind: "system",
+  schema,
+  instructions,
+  parse: (v) => plan.parse(v),
+  warnings: [
+    "Plano proposto por IA: confirme cada mudança. OBS usará x264/veryfast; valide consumo e conexão.",
+  ],
+};
 async function request(
   pool: Pool,
   c: Config,
   provider: "anthropic" | "openai",
   input: unknown,
   onUsage: (v: number, meta: unknown) => void,
+  task: AiTask,
 ) {
+  const { schema, instructions } = task;
   const key = await providerKey(pool, c, provider),
     model =
       process.env[
@@ -266,16 +290,15 @@ async function request(
           (v: { type: string; name: string }) =>
             v.type === "function_call" && v.name === "submit_plan",
         );
-    const parsed = plan.parse(
+    const parsed = task.parse(
       anthropic ? tool?.input : JSON.parse(tool?.arguments || "null"),
     );
     return {
       ...parsed,
       provider,
       model,
-      warnings: [
-        "Plano proposto por IA: confirme cada mudança. OBS usará x264/veryfast; valide consumo e conexão.",
-      ],
+      warnings: [...task.warnings],
+      ...(task.kind === "printing" ? { source: provider } : {}),
     };
   } finally {
     if (!reported) onUsage(maximum, { provider, model, inconclusive: true });
@@ -298,32 +321,65 @@ export async function generatePlan(
     .parse(body);
   if (!license.features.includes("ai_plans"))
     throw new HttpError(403, "Seu plano não inclui IA");
-  const userKey = license.user_id
-    ? "user:" + license.user_id
-    : "license:" + license.id;
+  return runStructured(
+    pool,
+    c,
+    {
+      deviceId: device.id,
+      licenseId: license.id,
+      walletKey: license.user_id
+        ? "user:" + license.user_id
+        : "license:" + license.id,
+    },
+    b.request_id,
+    b.allow_fallback,
+    b.context,
+    systemTask,
+  );
+}
+export async function runStructured(
+  pool: Pool,
+  c: Config,
+  actor: AiActor,
+  requestId: string,
+  allowFallback: boolean,
+  input: unknown,
+  task: AiTask,
+) {
+  const userKey = actor.walletKey;
+  const { schema, instructions } = task;
+  const inputHash = createHash("sha256")
+    .update(JSON.stringify({ task: task.kind, input }))
+    .digest("hex");
   const bytes =
     Buffer.byteLength(
-      JSON.stringify(b.context) + JSON.stringify(schema) + instructions,
+      JSON.stringify(input) + JSON.stringify(schema) + instructions,
     ) + 2048;
   const maximum = Math.ceil(
     bytes * RATES.anthropic.input * 1000 +
       2500 * RATES.anthropic.output * 1000 +
-      (b.allow_fallback
+      (allowFallback
         ? bytes * RATES.openai.input * 1000 + 4000 * RATES.openai.output * 1000
         : 0),
   );
 
   const prior = await transaction(pool, async (db) => {
-    await db.query("SELECT id FROM licenses WHERE id=$1 FOR UPDATE", [
-      license.id,
-    ]);
+    if (actor.licenseId)
+      await db.query("SELECT id FROM licenses WHERE id=$1 FOR UPDATE", [
+        actor.licenseId,
+      ]);
     const previous = (
       await db.query("SELECT * FROM ai_requests WHERE id=$1 FOR UPDATE", [
-        b.request_id,
+        requestId,
       ])
     ).rows[0];
     if (previous) {
-      if (previous.device_id !== device.id)
+      if (
+        previous.device_id !== actor.deviceId ||
+        previous.wallet_key !== userKey ||
+        previous.task !== task.kind ||
+        (previous.input_hash && previous.input_hash !== inputHash)
+      )
         throw new HttpError(409, "Identificador em uso");
       if (previous.status === "done") return previous.result;
       throw new HttpError(
@@ -346,10 +402,10 @@ export async function generatePlan(
     ).rows[0].n;
     if (simultaneous >= 3)
       throw new HttpError(429, "Há três análises em andamento. Aguarde.");
-    await reserve(db, userKey, maximum, b.request_id);
+    await reserve(db, userKey, maximum, requestId);
     await db.query(
-      "INSERT INTO ai_requests(id,device_id,wallet_key,reserved,status) VALUES($1,$2,$3,$4,'running')",
-      [b.request_id, device.id, userKey, maximum],
+      "INSERT INTO ai_requests(id,device_id,wallet_key,reserved,status,task,input_hash) VALUES($1,$2,$3,$4,'running',$5,$6)",
+      [requestId, actor.deviceId, userKey, maximum, task.kind, inputHash],
     );
     return null;
   });
@@ -364,16 +420,16 @@ export async function generatePlan(
   try {
     let result;
     try {
-      result = await request(pool, c, "anthropic", b.context, onUsage);
+      result = await request(pool, c, "anthropic", input, onUsage, task);
     } catch (primary) {
-      if (!b.allow_fallback) throw primary;
-      result = await request(pool, c, "openai", b.context, onUsage);
+      if (!allowFallback) throw primary;
+      result = await request(pool, c, "openai", input, onUsage, task);
       result.warnings.push("Fallback OpenAI utilizado com sua autorização.");
     }
-    await settle(pool, b.request_id, "done", charged, result, usage);
+    await settle(pool, requestId, "done", charged, result, usage);
     return result;
   } catch (error) {
-    await settle(pool, b.request_id, "failed", charged, null, usage);
+    await settle(pool, requestId, "failed", charged, null, usage);
     const failure = new HttpError(
       502,
       "A IA não entregou um plano válido. O saldo não utilizado foi devolvido. Uso faturado ou inconclusivo aparece no extrato; consulte o suporte se necessário.",

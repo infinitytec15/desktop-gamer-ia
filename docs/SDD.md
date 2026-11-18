@@ -2,6 +2,8 @@
 
 Nov 17, 2026 · @Gilberto jr
 
+Extensão solicitada em 17/11/2026: planejamento de impressão 3D FDM/resina no desktop e site, incluindo Bambu, Creality, Flashforge, Elegoo e outros fabricantes. A beta 0.4 implementa análise STL local, parâmetros limitados pelo cenário/material, comparação, cópias de presets compatíveis e orientação em formatos proprietários. Escopo/compatibilidade real em [IMPRESSAO-3D.md](IMPRESSAO-3D.md); evidências em [progress.md](progress.md). Não equivale a controle universal de fatiadores nem homologação física.
+
 ## 1. Visão geral
 
 O GameForge AI é um app desktop (Windows 10/11 x64 e macOS 13+) que diagnostica o computador e aplica configurações completas de sistema, jogos, OBS Studio e Discord por meio de assistentes passo a passo com botões. A inteligência vem da API do Claude: ela lê o diagnóstico e um roteiro (skill) e devolve um plano estruturado, que o app executa com ferramentas locais seguras e reversíveis.

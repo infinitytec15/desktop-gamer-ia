@@ -1,5 +1,13 @@
-import { useState, useEffect, type FormEvent, type ReactNode } from "react";
 import {
+  lazy,
+  Suspense,
+  useState,
+  useEffect,
+  type FormEvent,
+  type ReactNode,
+} from "react";
+import {
+  Printer,
   Activity,
   ArrowRight,
   ArrowUpRight,
@@ -38,6 +46,7 @@ import {
 } from "./lib";
 import { Brand, Link, Loading, Empty, Field, Modal } from "./ui";
 import { Landing, Legal, Plans, Packages } from "./Landing";
+const Printing = lazy(() => import("./Printing"));
 type Session = {
   userId: string | null;
   role: "user" | "admin";
@@ -87,6 +96,12 @@ export default function App() {
         ? "Minha conta · GameForge AI"
         : "GameForge AI — Seu setup sob controle";
   }, [path]);
+  if (path === "/impressao-3d")
+    return (
+      <Suspense fallback={<Loading />}>
+        <Printing standalone />
+      </Suspense>
+    );
   if (path === "/")
     return <Landing catalog={catalog.data} error={catalog.error} />;
   if (path === "/termos" || path === "/privacidade")
@@ -268,6 +283,7 @@ function Auth({ path, sync }: { path: string; sync: () => Promise<void> }) {
 }
 const userNav = [
   ["", "Visão geral", LayoutDashboard],
+  ["impressao-3d", "Impressão 3D", Printer],
   ["planos", "Planos", Sparkles],
   ["assinatura", "Assinatura", CreditCard],
   ["chaves", "Chaves e dispositivos", KeyRound],
@@ -656,6 +672,12 @@ function UserContent(c: Context & { data: Row }) {
     }, "");
   const activeKeys = data.licenses.filter((r: Row) => !r.revoked_at);
   const balance = data.credits.balance;
+  if (page === "impressao-3d")
+    return (
+      <Suspense fallback={<Loading />}>
+        <Printing />
+      </Suspense>
+    );
   if (page === "planos")
     return (
       <>

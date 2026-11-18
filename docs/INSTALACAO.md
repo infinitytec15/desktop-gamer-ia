@@ -1,6 +1,6 @@
-# Atualização 0.3 — licença Cloud
+# Atualização 0.4 — licença Cloud e impressão 3D
 
-A versão atual é `target/release/bundle/nsis/GameForge AI_0.3.0_x64-setup.exe`, compilada com domínio e chave pública em `config/desktop-cloud.json`. Gere com `npm run installer`. A IA passa pelo serviço Cloud; ative a chave em Configurações → Licença. Veja [Railway e distribuição](CLOUD-RAILWAY.md). O texto 0.2 abaixo é histórico da beta BYOK.
+A versão atual é `target/release/bundle/nsis/GameForge AI_0.4.0_x64-setup.exe`, compilada com domínio e chave pública em `config/desktop-cloud.json`. Gere com `npm run installer`. A IA passa pelo serviço Cloud; ative a chave em Configurações → Licença. Veja [Railway e distribuição](CLOUD-RAILWAY.md). O módulo Impressão 3D analisa STL localmente e prepara planos/perfis para revisão. Consulte [compatibilidade e uso](IMPRESSAO-3D.md). O texto 0.2 abaixo é histórico da beta BYOK.
 
 # Instalação Windows — GameForge AI beta
 

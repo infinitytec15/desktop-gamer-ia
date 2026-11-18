@@ -319,6 +319,23 @@ pub fn generate(context: &Value, allow_fallback: bool) -> Result<OptimizationPla
     plan.validate()?;
     Ok(plan)
 }
+pub fn printing(input: &Value) -> Result<Value, Error> {
+    let _guard = LOCK.lock().map_err(|_| invalid("Ativação ocupada"))?;
+    let (a, claims) = verified()?;
+    if !claims.features.iter().any(|f| f == "ai_plans") {
+        return Err(invalid("Sua licença não inclui IA"));
+    }
+    if serde_json::to_vec(input)?.len() > 16384 {
+        return Err(invalid("Dados de impressão excedem o limite"));
+    }
+    post(
+        "/api/desktop/printing/ai",
+        input,
+        Some(&a.refresh_token),
+        145,
+    )
+    .map_err(cloud_error)
+}
 #[cfg(test)]
 mod tests {
     use super::*;

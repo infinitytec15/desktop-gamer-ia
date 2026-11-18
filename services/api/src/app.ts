@@ -1,3 +1,4 @@
+import { accountActor, generatePrinting } from "./printing.js";
 import express, {
   type Request,
   type Response,
@@ -392,6 +393,37 @@ export function createApp(pool: Pool, c: Config) {
     res.json({ ok: true });
   });
 
+  app.post("/api/account/printing/ai", requireUser, async (req, res) => {
+    await rateLimit(pool, c, "printing-ai:" + req.auth!.userId, 10, 60);
+    res.json(
+      await generatePrinting(
+        pool,
+        c,
+        await accountActor(pool, req.auth!.userId!),
+        req.body,
+      ),
+    );
+  });
+  app.post("/api/desktop/printing/ai", async (req, res) => {
+    const { device, license } = await deviceAuth(pool, c, bearer(req));
+    if (!license.features.includes("ai_plans"))
+      throw new HttpError(403, "Seu plano não inclui IA");
+    await rateLimit(pool, c, "ai:" + device.id, 10, 60);
+    res.json(
+      await generatePrinting(
+        pool,
+        c,
+        {
+          deviceId: device.id,
+          licenseId: license.id,
+          walletKey: license.user_id
+            ? "user:" + license.user_id
+            : "license:" + license.id,
+        },
+        req.body,
+      ),
+    );
+  });
   app.post("/api/desktop/ai/plan", async (req, res) => {
     const { device, license } = await deviceAuth(pool, c, bearer(req));
     await rateLimit(pool, c, "ai:" + device.id, 10, 60);

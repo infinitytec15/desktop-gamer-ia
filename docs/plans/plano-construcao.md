@@ -2,6 +2,8 @@
 
 Data: 17/11/2026.
 
+Extensão 0.4: impressão 3D solicitada pelo usuário. Fases: (1) pesquisar formatos/fontes e registrar compatibilidade; (2) contratos e validações térmicas/vazão/resina; (3) análise STL local e cópias de perfis com original preservado; (4) UI compartilhada desktop/web e proxy com carteira existente; (5) testes, documentação, instalador e publicação. Aceite desta beta: plano revisável, limites rejeitados, originais preservados e nenhuma simulação apresentada como integração nativa homologada. Impressão física e importação nas versões reais dos fatiadores permanecem uma fase de homologação separada. Evidências em `docs/progress.md`, guia em `docs/IMPRESSAO-3D.md`.
+
 Base: `SDD — GameForge AI Otimizador de PC, OBS, Discord e Jogos com Claude.md`, presente na raiz do projeto. Este plano transforma o SDD em entregas executáveis; decisões propostas abaixo devem ser registradas no SDD/ADRs antes de sua implementação.
 
 ## 1. Resultado e estratégia

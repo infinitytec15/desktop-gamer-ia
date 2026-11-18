@@ -3,6 +3,8 @@ fn main() {
     println!("cargo:rerun-if-env-changed=GAMEFORGE_LICENSE_PUBLIC_KEY_B64");
     let attributes =
         tauri_build::Attributes::new().app_manifest(tauri_build::AppManifest::new().commands(&[
+            "printing_ai",
+            "save_print_artifact",
             "license_status",
             "license_activate",
             "license_deactivate",

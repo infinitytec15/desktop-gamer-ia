@@ -1,20 +1,22 @@
 {
   "name": "@gameforge/api",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
+    "build": "npm run build -w @gameforge/printing && tsc",
     "start": "node dist/server.js",
     "test": "tsx --test tests/*.test.ts",
-    "secrets": "node scripts/generate-secrets.mjs"
+    "secrets": "node scripts/generate-secrets.mjs",
+    "pretest": "npm run build -w @gameforge/printing"
   },
   "dependencies": {
     "express": "^5.1.0",
     "pg": "^8.16.0",
     "zod": "^4.0.0",
-    "helmet": "^8.1.0"
+    "helmet": "^8.1.0",
+    "@gameforge/printing": "0.4.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",

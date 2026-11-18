@@ -1,12 +1,13 @@
 {
   "name": "@gameforge/web",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 1430",
-    "build": "tsc --noEmit && vite build",
-    "preview": "vite preview --host 127.0.0.1 --port 1430"
+    "build": "npm run build -w @gameforge/printing && tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 1430",
+    "predev": "npm run build -w @gameforge/printing"
   },
   "dependencies": {
     "react": "^19.0.0",
@@ -14,7 +15,8 @@
     "lucide-react": "^0.468.0",
     "three": "^0.180.0",
     "gsap": "^3.13.0",
-    "@fontsource/inter": "^5.3.0"
+    "@fontsource/inter": "^5.3.0",
+    "@gameforge/printing": "0.4.0"
   },
   "devDependencies": {
     "@types/three": "^0.180.0",

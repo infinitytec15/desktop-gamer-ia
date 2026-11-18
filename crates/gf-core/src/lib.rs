@@ -5,6 +5,7 @@ pub mod diagnostics;
 pub mod integrations;
 pub mod inventory;
 pub mod obs;
+pub mod printing;
 pub mod secrets;
 pub mod system;
 pub mod workflow;

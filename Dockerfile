@@ -4,7 +4,9 @@ COPY package.json package-lock.json ./
 COPY apps/desktop/package.json apps/desktop/package.json
 COPY apps/web/package.json apps/web/package.json
 COPY services/api/package.json services/api/package.json
-RUN npm ci --workspace @gameforge/web --workspace @gameforge/api --include-workspace-root=false
+COPY packages/printing/package.json packages/printing/package.json
+RUN npm ci --workspace @gameforge/web --workspace @gameforge/api --workspace @gameforge/printing --include-workspace-root=false
+COPY packages/printing packages/printing
 COPY apps/web apps/web
 COPY services/api services/api
 RUN npm run web:build && npm run api:build
@@ -16,7 +18,9 @@ COPY package.json package-lock.json ./
 COPY apps/desktop/package.json apps/desktop/package.json
 COPY apps/web/package.json apps/web/package.json
 COPY services/api/package.json services/api/package.json
+COPY packages/printing/package.json packages/printing/package.json
 RUN npm ci --omit=dev --workspace @gameforge/api --include-workspace-root=false && npm cache clean --force
+COPY --from=build --chown=node:node /app/packages/printing/dist packages/printing/dist
 COPY --from=build --chown=node:node /app/services/api/dist services/api/dist
 COPY --from=build --chown=node:node /app/services/api/migrations services/api/migrations
 COPY --from=build --chown=node:node /app/apps/web/dist apps/web/dist

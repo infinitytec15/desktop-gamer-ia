@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-printing-ai"
+description = "Enables the printing_ai command without any pre-configured scope."
+commands.allow = ["printing_ai"]
+
+[[permission]]
+identifier = "deny-printing-ai"
+description = "Denies the printing_ai command without any pre-configured scope."
+commands.deny = ["printing_ai"]
