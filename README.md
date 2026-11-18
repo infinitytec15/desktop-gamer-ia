@@ -63,3 +63,6 @@ Sem promessa de ganho de FPS, usuários ilimitados ou configuração automática
 Ações de sistema e OBS têm testes com adaptadores/protocolo controlados; não aplicamos otimizações nem iniciamos transmissão na máquina durante o desenvolvimento. Gateway e IA foram simulados nos testes financeiros, que usam PostgreSQL real. Homologação com credenciais de produção e OBS/Windows reais continua necessária antes da abertura comercial. Verificação de e-mail, recuperação automática de senha, identificação da empresa e canal de atendimento ainda precisam de conclusão operacional antes de vendas.
 
 Dados locais em `%APPDATA%/GameForge`; credenciais no cofre do sistema. Recuperação: `gameforge.exe --restore-system-last`, `--restore-obs-last` ou `--restore-last`. Nunca execute comandos livres produzidos pela IA. Consulte [progresso](docs/progress.md), [SDD](docs/SDD.md) e [instalação](docs/INSTALACAO.md).
+
+
+Desktop beta 0.6: [Windows x64 e macOS universal](https://github.com/infinitytec15/desktop-gamer-ia/releases/tag/v0.6.0). O site é vitrine e gestão de conta, planos, créditos, chaves e downloads; as ferramentas ficam no aplicativo. Quick Boost tem quatro ajustes exclusivos do Windows; no Mac, use os módulos compatíveis indicados na interface. Consulte docs/INSTALACAO.md para assinatura, requisitos e limites reais.

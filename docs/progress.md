@@ -174,3 +174,10 @@ GitHub: cloud/frontend/Rust Windows de 886daba passaram. Hosts macos-latest fica
 
 
 Primeiro empacotamento Mac compilou os dois alvos e criou o DMG (12,34 MiB), mas o verificador buscava a pasta .app depois da limpeza automática do Tauri. Nenhum link Mac foi liberado. Corrigido para preservar o DMG como artefato de CI, montá-lo somente para leitura, verificar o aplicativo realmente empacotado, descobrir o executável pelo Info.plist e conferir as duas arquiteturas. A matriz de CI passa a usar o host macos-15-intel disponível; a compilação do app permanece universal.
+
+
+Mac 0.6 final: o segundo build preservou o DMG e passou na integridade (hdiutil) e na assinatura ad hoc do app montado somente para leitura. A chamada lipo tinha a ordem dos argumentos incorreta; corrigida sem recompilação, recuperando o artefato do run 44380302193. Runs de recuperação/verificação 44386601021 e 44386715370 concluíram SUCCESS: versão 0.6.0, identificador app.gameforge.desktop, assinatura estrita e arquiteturas arm64/x86_64 conferidos antes de publicar. O workflow agora preserva o DMG, permite recuperação apenas de runs do mesmo workflow/repositório e mantém verificação de versão/identidade/arquiteturas.
+
+DMG universal publicado no prerelease v0.6.0, 12.940.473 bytes; SHA256 e6e7c90dc3a73ac6f942ade02b84af302f9718d36a0c2da1377a8de88b00729c. Download público retornou 200 e seu hash coincidiu com SHA256SUMS-macos.txt. Não houve instalação nem abertura do app em Mac físico. Assinatura ad hoc não equivale a Developer ID/notarização; os limites por plataforma continuam explícitos.
+
+CI final 1d00d4a/run 44380268832 passou nos quatro jobs: cloud, frontend, Rust Windows e Rust macos-15-intel. O código do aplicativo distribuído permanece o do tag v0.6.0/886daba; commits posteriores corrigem apenas workflows e evidências. A variável pública DESKTOP_MAC_DOWNLOAD_URL foi cadastrada após validar o artefato, para ativar no deploy final. Mercado Pago permanece desabilitado; nenhuma cobrança, chamada paga de IA, alteração de credencial, instalação ou otimização física foi feita nesta atualização.
