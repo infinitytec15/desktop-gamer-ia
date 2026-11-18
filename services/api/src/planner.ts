@@ -202,7 +202,8 @@ async function request(
             input_schema: schema,
           },
         ],
-        tool_choice: { type: "tool", name: "submit_plan" },
+        // Opus 5.5 rejects forced tool use. Validate the selected tool and its input below.
+        tool_choice: { type: "auto" },
       }
     : {
         model,
@@ -210,6 +211,8 @@ async function request(
         input: JSON.stringify(input),
         max_output_tokens: 4000,
         store: false,
+        service_tier: "default",
+        reasoning: { effort: "low" },
         tools: [
           {
             type: "function",
@@ -260,7 +263,7 @@ async function request(
       reported = true;
       throw new HttpError(
         502,
-        "Provedor recusou a requisição. Verifique modelo, saldo e credenciais.",
+        `Provedor recusou a requisição (HTTP ${res.status}). Verifique modelo, saldo e credenciais.`,
       );
     }
     const reader = res.body?.getReader();
@@ -303,6 +306,72 @@ async function request(
   } finally {
     if (!reported) onUsage(maximum, { provider, model, inconclusive: true });
   }
+}
+
+export async function testProvider(
+  pool: Pool,
+  c: Config,
+  provider: "anthropic" | "openai",
+) {
+  const started = Date.now();
+  let charged = 0;
+  let inconclusive = false;
+  const usage: Record<string, number>[] = [];
+  let model = provider === "anthropic" ? "claude-opus-5-5" : "gpt-6.1-sol";
+  let error: string | null = null;
+  try {
+    const result = await request(
+      pool,
+      c,
+      provider,
+      {
+        goal: "Teste de integração sem máquina vinculada. Retorne submit_plan com ações vazias e vídeo 1280x720, 30 fps, 3500 kbps. Nenhuma ação será executada.",
+        os: "Cenário de teste",
+        architecture: "x86_64",
+        cpu: "Não coletada",
+        cores: 1,
+        ram_gb: 8,
+        used_ram_gb: 0,
+        cpu_usage: 0,
+        disks: [],
+      },
+      (cost, meta) => {
+        charged += cost;
+        const m = meta as {
+          inconclusive?: boolean;
+          usage?: Record<string, unknown>;
+        };
+        inconclusive ||= !!m.inconclusive;
+        if (m.usage) {
+          const raw = m.usage;
+          usage.push({
+            input_tokens: Number(raw.input_tokens || 0),
+            output_tokens: Number(raw.output_tokens || 0),
+          });
+        }
+      },
+      systemTask,
+    );
+    model = result.model;
+  } catch (failure) {
+    error =
+      failure instanceof HttpError
+        ? failure.message
+        : "O provedor não entregou o plano estruturado válido. Confira o modelo e tente novamente.";
+  }
+  return {
+    provider,
+    model,
+    success: error === null,
+    error,
+    duration_ms: Date.now() - started,
+    usage,
+    inconclusive,
+    billable_credits: charged / 1_000_000,
+    estimated_usd: charged / 1_000_000_000,
+    customer_wallet_debited: false,
+    tested_at: new Date().toISOString(),
+  };
 }
 
 export async function generatePlan(

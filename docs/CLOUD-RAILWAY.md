@@ -99,3 +99,21 @@ railway config plan
 ```
 
 [Documentação oficial IaC](https://docs.railway.com/infrastructure-as-code). O plano aplicado nesta entrega preservou variáveis, GitHub e Postgres, modificando somente build, health check e política de reinício.
+
+
+## Validação real de IA — 0.4
+
+No admin, abra Integrações e salve OPENAI_API_KEY no campo OpenAI. ANTHROPIC_API_KEY é necessária para testar o Claude. Também é possível defini-las no Railway; a chave do cofre tem precedência. Não envie chaves no chat nem em arquivos versionados. O cadastro da chave não inicia chamadas.
+
+O botão **Testar provedor (usa API)** envia um cenário de contrato sem máquina vinculada ao modelo configurado, valida o plano, registra modelo/data/latência/usage e custo equivalente no histórico administrativo. A chamada usa saldo da conta do provedor; não desconta carteira de cliente e não aplica ações. Limite: três testes por provedor a cada cinco minutos. HTTP 401/403/429 é mostrado sem copiar respostas ou segredos do provedor. Falha de transporte pode ter sido faturada: o teto conservador é identificado como inconclusivo, não como uso medido. Um sucesso confirma o contrato desse cenário, não a homologação de todo hardware ou de todas as respostas de IA.
+
+Operador autenticado no CLI Railway pode verificar somente presença/modelo/último teste, sem ler a chave:
+
+```powershell
+node scripts/validate-ai-provider.mjs openai
+# Só após autorizar consumo real: uma chamada, com credenciais privadas em memória.
+node scripts/validate-ai-provider.mjs openai --run
+node scripts/validate-ai-provider.mjs anthropic --run
+```
+
+Opus 5.5 usa tool_choice auto; chamadas forçadas são rejeitadas por esse modelo. A aplicação aceita somente submit_plan com contrato válido. OpenAI usa Responses, esforço low e service_tier default para manter o limite de custo e preço Standard. Fontes: [Anthropic tool use](https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools) e [GPT-6.1 Sol](https://developers.openai.com/api/docs/models/gpt-6.1-sol).

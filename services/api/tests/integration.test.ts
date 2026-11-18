@@ -565,6 +565,11 @@ integration(
         calls++;
         const sent = JSON.parse(String(init?.body));
         assert.equal(sent.tools[0].name, "submit_plan");
+        assert.equal(
+          sent.tool_choice.type,
+          "auto",
+          "Opus 5.5 does not support forced tools",
+        );
         assert.ok(!JSON.stringify(sent).includes("STL_BINARY_CONTENT"));
         return Response.json({
           usage: { input_tokens: 1000, output_tokens: 1000 },
@@ -623,6 +628,103 @@ integration(
     } finally {
       globalThis.fetch = realFetch;
       delete process.env.ANTHROPIC_API_KEY;
+    }
+  },
+);
+
+integration(
+  "admin provider test validates OpenAI, sanitizes failures and never debits customer wallets",
+  async () => {
+    assert.equal((await post("/admin/providers/openai/test", {})).status, 403);
+    const login = await post("/auth/admin", {
+      email: c.adminEmail,
+      password: c.adminPassword,
+    });
+    assert.equal(login.status, 200);
+    const cookie = login.headers.get("set-cookie")!.split(";")[0];
+    const before = (
+      await pool.query("SELECT count(*)::int n FROM credit_ledger")
+    ).rows[0].n;
+    process.env.OPENAI_API_KEY = "fixture-provider-test-key";
+    let calls = 0;
+    globalThis.fetch = async (input, init) => {
+      if (String(input) === "https://api.openai.com/v1/responses") {
+        calls++;
+        const sent = JSON.parse(String(init?.body));
+        assert.equal(sent.model, "gpt-6.1-sol");
+        assert.equal(sent.store, false);
+        assert.equal(sent.service_tier, "default");
+        assert.equal(sent.reasoning.effort, "low");
+        if (calls === 2)
+          return Response.json(
+            {
+              error: {
+                message: "fixture-provider-test-key should never be exposed",
+              },
+            },
+            { status: 401 },
+          );
+        if (calls === 3) throw new Error("fixture transport failure");
+        return Response.json({
+          usage: {
+            input_tokens: 100,
+            output_tokens: 40,
+            input_tokens_details: { cached_tokens: 20 },
+          },
+          output: [
+            {
+              type: "function_call",
+              name: "submit_plan",
+              arguments: JSON.stringify({
+                summary: "Integration check",
+                system_actions: [],
+                video: { width: 1280, height: 720, fps: 30, bitrate: 3500 },
+              }),
+            },
+          ],
+        });
+      }
+      return realFetch(input, init);
+    };
+    try {
+      const first = await (
+        await post("/admin/providers/openai/test", {}, cookie)
+      ).json();
+      assert.equal(first.success, true);
+      assert.equal(first.billable_credits, 0.562);
+      assert.equal(first.customer_wallet_debited, false);
+      const second = await (
+        await post("/admin/providers/openai/test", {}, cookie)
+      ).json();
+      assert.equal(second.success, false);
+      assert.match(second.error, /HTTP 401/);
+      assert.ok(!JSON.stringify(second).includes("fixture-provider-test-key"));
+      const third = await (
+        await post("/admin/providers/openai/test", {}, cookie)
+      ).json();
+      assert.equal(third.success, false);
+      assert.equal(third.inconclusive, true);
+      assert.ok(third.billable_credits > 0);
+      assert.equal(
+        (await post("/admin/providers/openai/test", {}, cookie)).status,
+        429,
+      );
+      assert.equal(calls, 3);
+      assert.equal(
+        (await pool.query("SELECT count(*)::int n FROM credit_ledger")).rows[0]
+          .n,
+        before,
+      );
+      const audit = (
+        await pool.query(
+          "SELECT metadata FROM audit_log WHERE event='provider.tested' ORDER BY id DESC LIMIT 3",
+        )
+      ).rows;
+      assert.equal(audit.length, 3);
+      assert.ok(!JSON.stringify(audit).includes("fixture-provider-test-key"));
+    } finally {
+      globalThis.fetch = realFetch;
+      delete process.env.OPENAI_API_KEY;
     }
   },
 );

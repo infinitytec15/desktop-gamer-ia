@@ -1801,7 +1801,7 @@ function AdminContent(
         </Section>
         <Section
           title="Chaves dos provedores de IA"
-          description="Gravadas com AES-256-GCM no banco. A chave de criptografia é fornecida por variável do servidor."
+          description="Gravadas com AES-256-GCM no banco. Depois de salvar, teste o provedor: faz uma chamada real e usa saldo da API da plataforma, sem descontar uma carteira de cliente. Repita o teste ao trocar a chave ou o modelo."
         >
           <div className="provider-grid">
             {data.providers.map((p: Row) => (
@@ -1843,6 +1843,18 @@ function AdminContent(
                   <button className="button secondary small" disabled={busy}>
                     Salvar chave
                   </button>
+                  <button
+                    type="button"
+                    className="button secondary small"
+                    disabled={busy || !(p.last_four || p.environment)}
+                    onClick={() =>
+                      void mutate(() =>
+                        api("/admin/providers/" + p.provider + "/test", {}),
+                      )
+                    }
+                  >
+                    {busy ? "Aguarde…" : "Testar provedor (usa API)"}
+                  </button>
                   {p.last_four && (
                     <button
                       type="button"
@@ -1866,6 +1878,34 @@ function AdminContent(
                     </button>
                   )}
                 </div>
+                {p.last_test && (
+                  <div
+                    role="status"
+                    className={
+                      "alert " + (p.last_test.success ? "success" : "error")
+                    }
+                  >
+                    <strong>
+                      {p.last_test.success
+                        ? "Plano estruturado validado"
+                        : "Falha na validação"}
+                    </strong>
+                    <p>
+                      {p.last_test.model} ·{" "}
+                      {new Date(p.last_test.tested_at).toLocaleString("pt-BR")}
+                    </p>
+                    {p.last_test.error && <p>{p.last_test.error}</p>}
+                    <small>
+                      {p.last_test.inconclusive
+                        ? "Uso inconclusivo; teto conservador"
+                        : "Consumo informado"}
+                      : US$ {Number(p.last_test.estimated_usd).toFixed(5)} ·{" "}
+                      {Number(p.last_test.billable_credits).toFixed(3)} créditos
+                      equivalentes. Nenhum ajuste foi aplicado.{" "}
+                      {p.last_test.duration_ms} ms.
+                    </small>
+                  </div>
+                )}
               </form>
             ))}
           </div>

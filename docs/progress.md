@@ -95,3 +95,15 @@ Verificação até esta etapa: 48 testes Rust, Clippy -D warnings, dois Vitest, 
 
 
 Bateria final 0.4: 92 verificações passaram (48 Rust incluindo tipos, 17 API, 11 impressão, 2 Vitest, 9 E2E desktop, 5 E2E web). Os dois E2E de impressão foram repetidos após o ajuste de validação de modelo e arredondamento de vazão. npm run build, build:cloud, Clippy e instalador NSIS release passaram. Instalador 4,40 MiB; SHA256 dfb8362c7e4fcb9c042880e7bde646ec925a27840eeec311c67bcd1ed0e2cf79. Não instalado/executado no caminho nativo nesta homologação.
+
+
+## Publicação e preparação de testes reais — 18/11/2026
+
+Commit 174a210 publicado, Railway deployment 8ab9a9be-fc7c-4b06-9b8a-b30dc99efc5c SUCCESS. CI desse commit passou nos quatro jobs cloud/frontend/Rust Windows/Rust macOS. Release v0.4.0 contém NSIS e SHA256SUMS; DESKTOP_DOWNLOAD_URL atualizado. Smoke público confirmou saúde, três planos, admin, confiança desktop e download, sem cobrança habilitada; 100 leituras concorrência 10 p95 174ms observado, não teste sustentado. Nenhuma conta artificial criada em produção.
+
+Ao preparar uso real, nova consulta à documentação oficial identificou que Opus 5.5 rejeita tool_choice forçado. Corrigido para auto com validação estrita da resposta na aplicação; OpenAI usa Responses/esforço low/tier default. Adicionado teste administrativo por provedor com cenário explicitamente de contrato, rate limit, auditoria de uso/custo, falhas sanitizadas e carteira de cliente intocada. Botão no admin e script de operação com segredos somente em memória; sem --run faz apenas readiness. API ampliada para 18 testes, todos passaram em PostgreSQL isolado. O teste verifica body real enviado pelo cliente (com transporte controlado), custo/cache, HTTP 401 sem vazamento, consumo inconclusivo e limite de tentativas. Não tratar esse teste como chamada paga real.
+
+Em 18/11, a verificação de presença retornou OpenAI não configurada. Foi solicitado ao operador cadastrar as chaves no cofre do admin. Testes pagos, OBS/Windows reais, importação nativa dos fatiadores e impressão física continuam pendentes; não houve execução de comandos de IA, impressão, transmissão ou otimização nesta etapa.
+
+
+Validação da atualização de provedores: 18 testes API passaram. E2E web: quatro fluxos passaram na bateria inicial; o teste de admin revelou uma premissa incorreta da fixture (ambiente local já tinha uma credencial de ambiente, sem chamada a ela). O teste passou a conferir ambas as origens suportadas, salvou/removeu apenas chave fictícia e passou ao repetir. Inclui campos limpos após salvar, disponibilidade do botão e ausência de overflow mobile. Build cloud passou. O total de verificações da versão passa a 93. Credenciais do host não foram usadas em chamadas.

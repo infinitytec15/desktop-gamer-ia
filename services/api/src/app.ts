@@ -61,7 +61,7 @@ import { topupCheckout, reconcileTopup } from "./topups.js";
 
 import { transaction } from "./db.js";
 
-import { generatePlan } from "./planner.js";
+import { generatePlan, testProvider } from "./planner.js";
 
 const uuid = z.uuid();
 
@@ -786,6 +786,11 @@ export function createApp(pool: Pool, c: Config) {
         "SELECT provider,last_four,updated_at FROM provider_credentials",
       )
     ).rows;
+    const tests = (
+      await pool.query(
+        "SELECT metadata FROM audit_log WHERE event='provider.tested' ORDER BY id DESC LIMIT 10",
+      )
+    ).rows;
     res.json({
       app_url: c.appUrl,
       public_key: publicRaw(c.privateKey),
@@ -805,12 +810,23 @@ export function createApp(pool: Pool, c: Config) {
           !!process.env[
             provider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY"
           ],
+        last_test:
+          tests.find((test) => test.metadata.provider === provider)?.metadata ||
+          null,
       })),
       models: {
         anthropic: process.env.ANTHROPIC_MODEL || "claude-opus-5-5",
         openai: process.env.OPENAI_MODEL || "gpt-6.1-sol",
       },
     });
+  });
+
+  app.post("/api/admin/providers/:provider/test", async (req, res) => {
+    const provider = z.enum(["anthropic", "openai"]).parse(req.params.provider);
+    await rateLimit(pool, c, "provider-test:" + provider, 3, 300);
+    const result = await testProvider(pool, c, provider);
+    await audit(pool, "admin", "provider.tested", result);
+    res.json(result);
   });
 
   app.post("/api/admin/providers/:provider", async (req, res) => {

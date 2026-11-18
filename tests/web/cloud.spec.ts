@@ -153,6 +153,23 @@ test("admin login, catalogue edits, manual keys, commercial settings and integra
   await expect(
     page.getByLabel("GAMEFORGE_LICENSE_PUBLIC_KEY_B64"),
   ).not.toHaveValue("");
+  const openai = page.locator(".provider-grid form").filter({
+    has: page.getByRole("heading", { name: "OpenAI", exact: true }),
+  });
+  const testProvider = openai.getByRole("button", {
+    name: "Testar provedor (usa API)",
+  });
+  const environmentConfigured = (await openai.textContent())?.includes(
+    "Configurada no ambiente",
+  );
+  if (environmentConfigured) await expect(testProvider).toBeEnabled();
+  else await expect(testProvider).toBeDisabled();
+  await openai
+    .getByLabel("Nova chave de API")
+    .fill("fixture-openai-ui-credential-123456");
+  await openai.getByRole("button", { name: "Salvar chave" }).click();
+  await expect(testProvider).toBeEnabled();
+  await expect(openai.getByLabel("Nova chave de API")).toBeEmpty();
   await page.setViewportSize({ width: 390, height: 844 });
   expect(
     await page.evaluate(
@@ -163,5 +180,12 @@ test("admin login, catalogue edits, manual keys, commercial settings and integra
     path: ".impeccable/review/web-admin-mobile.png",
     fullPage: true,
   });
+  await openai.getByRole("button", { name: "Remover", exact: true }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Remover", exact: true })
+    .click();
+  if (environmentConfigured) await expect(testProvider).toBeEnabled();
+  else await expect(testProvider).toBeDisabled();
   expect(errors).toEqual([]);
 });

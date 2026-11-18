@@ -1848,6 +1848,9 @@
   .provider-grid > form:last-child {
     border-right: 0;
   }
+  .provider-grid .row-actions {
+    flex-wrap: wrap;
+  }
   .provider-grid h3 {
     font-size: 14px;
   }
