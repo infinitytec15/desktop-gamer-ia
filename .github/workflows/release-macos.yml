@@ -42,14 +42,25 @@ jobs:
       - run: npm ci
       - run: cargo test -p gf-core --locked
       - run: npm run tauri -w @gameforge/desktop -- build --target universal-apple-darwin --bundles dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-universal-dmg
+          path: target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+          retention-days: 7
       - name: Verify and publish beta artifacts
         run: |
-          app="target/universal-apple-darwin/release/bundle/macos/GameForge AI.app"
-          codesign --verify --deep --strict "$app"
-          lipo -verify_arch arm64 x86_64 "$app/Contents/MacOS/gameforge"
           dmg=$(find target/universal-apple-darwin/release/bundle/dmg -maxdepth 1 -name '*.dmg' -print -quit)
           test -n "$dmg"
           hdiutil verify "$dmg"
+          mount="$RUNNER_TEMP/gameforge-dmg-review"
+          mkdir -p "$mount"
+          hdiutil attach -readonly -nobrowse -noautoopen -mountpoint "$mount" "$dmg"
+          trap 'hdiutil detach "$mount"' EXIT
+          app="$mount/GameForge AI.app"
+          codesign --verify --deep --strict "$app"
+          binary=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")
+          lipo -verify_arch arm64 x86_64 "$app/Contents/MacOS/$binary"
           name="GameForge-AI-${RELEASE_TAG#v}-universal.dmg"
           cp "$dmg" "$name"
           shasum -a 256 "$name" > SHA256SUMS-macos.txt
