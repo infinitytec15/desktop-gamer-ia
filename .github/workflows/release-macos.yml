@@ -19,6 +19,7 @@ on:
         default: ''
 permissions:
   contents: write
+  actions: read
 jobs:
   macos:
     runs-on: ${{ inputs.runner }}
