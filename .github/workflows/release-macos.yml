@@ -13,6 +13,10 @@ on:
           - macos-15-intel
           - macos-latest
         default: macos-15-intel
+      artifact_run:
+        description: Existing packaging run ID (optional; verify saved DMG without rebuilding)
+        required: false
+        default: ''
 permissions:
   contents: write
 jobs:
@@ -22,16 +26,19 @@ jobs:
     env:
       APPLE_SIGNING_IDENTITY: '-'
       RELEASE_TAG: ${{ inputs.tag }}
+      ARTIFACT_RUN: ${{ inputs.artifact_run }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag }}
       - uses: actions/setup-node@v4
+        if: ${{ inputs.artifact_run == '' }}
         with:
           node-version: 24
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
+        if: ${{ inputs.artifact_run == '' }}
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
       - name: Validate release
@@ -39,15 +46,33 @@ jobs:
           [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
           test "$RELEASE_TAG" = "v$(node -p 'JSON.parse(require("fs").readFileSync("package.json")).version')"
           gh release view "$RELEASE_TAG" >/dev/null
+          if test -n "$ARTIFACT_RUN"; then
+            [[ "$ARTIFACT_RUN" =~ ^[0-9]+$ ]]
+            expected=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/release-macos.yml" --jq '.id')
+            actual=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ARTIFACT_RUN" --jq '.workflow_id')
+            test "$actual" = "$expected"
+            test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ARTIFACT_RUN" --jq '.event')" = 'workflow_dispatch'
+          fi
       - run: npm ci
+        if: ${{ inputs.artifact_run == '' }}
       - run: cargo test -p gf-core --locked
+        if: ${{ inputs.artifact_run == '' }}
       - run: npm run tauri -w @gameforge/desktop -- build --target universal-apple-darwin --bundles dmg
+        if: ${{ inputs.artifact_run == '' }}
       - uses: actions/upload-artifact@v4
+        if: ${{ inputs.artifact_run == '' }}
         with:
           name: macos-universal-dmg
           path: target/universal-apple-darwin/release/bundle/dmg/*.dmg
           if-no-files-found: error
           retention-days: 7
+      - uses: actions/download-artifact@v4
+        if: ${{ inputs.artifact_run != '' }}
+        with:
+          name: macos-universal-dmg
+          path: target/universal-apple-darwin/release/bundle/dmg
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.artifact_run }}
       - name: Verify and publish beta artifacts
         run: |
           dmg=$(find target/universal-apple-darwin/release/bundle/dmg -maxdepth 1 -name '*.dmg' -print -quit)
@@ -59,8 +84,10 @@ jobs:
           trap 'hdiutil detach "$mount"' EXIT
           app="$mount/GameForge AI.app"
           codesign --verify --deep --strict "$app"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" = "${RELEASE_TAG#v}"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")" = 'app.gameforge.desktop'
           binary=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")
-          lipo -verify_arch arm64 x86_64 "$app/Contents/MacOS/$binary"
+          lipo "$app/Contents/MacOS/$binary" -verify_arch arm64 x86_64
           name="GameForge-AI-${RELEASE_TAG#v}-universal.dmg"
           cp "$dmg" "$name"
           shasum -a 256 "$name" > SHA256SUMS-macos.txt
