@@ -1,13 +1,8 @@
-import { LicensePage } from "./features/license";
-import {
-  WelcomePage,
-  NotificationSettings,
-  ProgramsPage,
-  RequestsPage,
-} from "./features/programs";
+import { OverviewPage } from "./features/overview";
+import { SettingsPage } from "./features/settings";
+import { WelcomePage, ProgramsPage, RequestsPage } from "./features/programs";
 import {
   OptimizePage,
-  CredentialsPage,
   StreamingPage,
   OperationsPage,
 } from "./features/automation";
@@ -45,11 +40,14 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  Search,
   Wifi,
   Zap,
 } from "lucide-react";
 import type { Report } from "./domain";
 import "./style.css";
+import "./desktop.css";
+import { LiveSetupPage } from "./features/live";
 const PrintingPage = lazy(() => import("./features/printing"));
 const navigation = [
   { id: "home", label: "Visão geral", icon: LayoutDashboard },
@@ -66,6 +64,25 @@ const navigation = [
   { id: "history", label: "Histórico", icon: History },
   { id: "settings", label: "Configurações", icon: Settings },
 ];
+const pageHelp: Record<string, string> = {
+  boost:
+    "Do objetivo ao resultado: revise os ajustes do Windows e acompanhe cada etapa.",
+  programs:
+    "Encontre um programa, conte seu objetivo e siga o fluxo de configuração.",
+  requests:
+    "Acompanhe planos, execuções e os critérios de aceite que você definiu.",
+  printing:
+    "Analise sua peça e revise parâmetros para FDM ou resina antes de exportar.",
+  games: "Consulte os jogos encontrados nas bibliotecas Steam e Epic.",
+  obs: "Conecte o OBS, escolha o destino e revise um perfil separado de transmissão.",
+  discord: "Siga as orientações de voz e privacidade dentro do Discord.",
+  live: "Prepare seu setup por etapas: Windows, OBS e voz.",
+  network: "Verifique a conectividade e entenda o alcance das medições.",
+  monitor: "Acompanhe CPU, RAM, GPU e sensores disponíveis em tempo real.",
+  history:
+    "Veja o que mudou, confira o resultado e recupere configurações anteriores.",
+  settings: "Gerencie sua licença, notificações e a conexão local com o OBS.",
+};
 const descriptions: Record<string, string> = {
   games:
     "Detectar jogos e ajustar configurações compatíveis com o seu hardware.",
@@ -76,6 +93,8 @@ const descriptions: Record<string, string> = {
   monitor: "Acompanhar métricas coletadas do computador.",
 };
 function App() {
+  const [taskBusy, setTaskBusy] = useState(false);
+  const [navQuery, setNavQuery] = useState("");
   const [aiPlan, setAiPlan] = useState<OptimizationPlan | null>(null);
   const [route, setRoute] = useState(
     location.hash.slice(1) ||
@@ -132,13 +151,24 @@ function App() {
   }
   return (
     <div className="shell">
+      <a
+        className="skip-link"
+        href="#main-content"
+        onClick={(e) => {
+          e.preventDefault();
+          document.getElementById("main-content")?.focus();
+        }}
+      >
+        Ir para o conteúdo
+      </a>
       <aside>
         <a
           className="brand"
+          aria-disabled={taskBusy}
           href="#home"
           onClick={(e) => {
             e.preventDefault();
-            go("home");
+            if (!taskBusy) go("home");
           }}
         >
           <span className="brand-icon">
@@ -149,20 +179,69 @@ function App() {
             <small>Seu setup, em equilíbrio.</small>
           </span>
         </a>
+        <label className="nav-search">
+          <Search size={15} />
+          <input
+            aria-label="Buscar tela"
+            type="search"
+            value={navQuery}
+            onChange={(e) => setNavQuery(e.target.value)}
+            placeholder="Buscar ferramenta…"
+          />
+        </label>
         <nav aria-label="Navegação principal">
-          {navigation.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              aria-label={label}
-              aria-current={route === id ? "page" : undefined}
-              className={route === id ? "active" : ""}
-              onClick={() => go(id)}
-            >
-              <Icon size={19} />
-              <span>{label}</span>
-              {id === "live" && <span className="new">NOVO</span>}
-            </button>
-          ))}
+          {[
+            {
+              label: "Seu computador",
+              ids: ["home", "boost", "monitor", "programs", "games", "network"],
+            },
+            {
+              label: "Criação e transmissão",
+              ids: ["obs", "discord", "live", "printing"],
+            },
+            {
+              label: "Conta e atividade",
+              ids: ["requests", "history", "settings"],
+            },
+          ].map((group) => {
+            const items = navigation.filter(
+              (n) =>
+                group.ids.includes(n.id) &&
+                n.label
+                  .toLocaleLowerCase("pt-BR")
+                  .includes(navQuery.toLocaleLowerCase("pt-BR")),
+            );
+            return (
+              items.length > 0 && (
+                <div className="navigation-group" key={group.label}>
+                  <span>{group.label}</span>
+                  {items.map(({ id, label, icon: Icon }) => (
+                    <button
+                      key={id}
+                      title={label}
+                      aria-label={label}
+                      aria-current={route === id ? "page" : undefined}
+                      className={route === id ? "active" : ""}
+                      disabled={taskBusy}
+                      onClick={() => {
+                        go(id);
+                        setNavQuery("");
+                      }}
+                    >
+                      <Icon size={19} />
+                      <span>{label}</span>
+                    </button>
+                  ))}
+                </div>
+              )
+            );
+          })}
+          {navQuery &&
+            !navigation.some((n) =>
+              n.label
+                .toLocaleLowerCase("pt-BR")
+                .includes(navQuery.toLocaleLowerCase("pt-BR")),
+            ) && <p className="muted">Nenhuma tela encontrada.</p>}
         </nav>
         <div className="sidebar-note">
           <ShieldCheck size={19} />
@@ -176,20 +255,21 @@ function App() {
           </div>
         </div>
         <footer>
-          <span className="dot" /> Desenvolvimento · v0.2.0
+          <span className="dot" /> Beta · v0.6.0
         </footer>
       </aside>
       <div className="workspace">
         <header>
           <span>
-            Workspace <ChevronRight size={14} /> <strong>{page.label}</strong>
+            Meu computador <ChevronRight size={14} />{" "}
+            <strong>{page.label}</strong>
           </span>
           <span className="environment">
             <span className="dot" />
             {native ? "Aplicativo desktop" : "Prévia da interface"}
           </span>
         </header>
-        <main>
+        <main id="main-content" tabIndex={-1}>
           <div className="heading">
             <div>
               <h1>
@@ -202,7 +282,8 @@ function App() {
               <p>
                 {route === "home"
                   ? "Conheça seu computador antes de mudar qualquer coisa."
-                  : "Configure com clareza. Aplique com confiança."}
+                  : pageHelp[route] ||
+                    "Configure com clareza. Aplique com confiança."}
               </p>
             </div>
             {route === "home" && (
@@ -244,129 +325,19 @@ function App() {
           ) : route === "requests" ? (
             <RequestsPage />
           ) : route === "home" ? (
-            <>
-              <section className="overview">
-                <div className="scan-symbol">
-                  <Cpu size={48} strokeWidth={1} />
-                </div>
-                <div>
-                  <span className="status-label">
-                    {report ? "DIAGNÓSTICO BÁSICO" : "DIAGNÓSTICO PENDENTE"}
-                  </span>
-                  <h2>
-                    {report
-                      ? "O primeiro retrato do seu PC."
-                      : "Primeiro, vamos conhecer sua máquina."}
-                  </h2>
-                  <p>
-                    {report
-                      ? "Dados de CPU, memória, discos, processos e sensores disponíveis, obtidos pelo núcleo nativo. GPU e drivers ainda não são coletados."
-                      : "A análise identifica o ambiente do computador. Nenhuma configuração é alterada durante a leitura."}
-                  </p>
-                  <button
-                    className="text-button"
-                    disabled={busy}
-                    onClick={() => void scan()}
-                  >
-                    {report ? "Atualizar diagnóstico" : "Começar diagnóstico"}
-                    <ArrowRight size={16} />
-                  </button>
-                </div>
-                <div className="safe">
-                  <ShieldCheck size={20} />
-                  <span>
-                    Somente leitura
-                    <br />
-                    <strong>Sem alterações</strong>
-                  </span>
-                </div>
-              </section>
-              <section className="metrics" aria-label="Informações do sistema">
-                {[
-                  ["Processador", report?.cpu || "Aguardando análise"],
-                  [
-                    "Núcleos lógicos",
-                    report ? String(report.logical_cores) : "—",
-                  ],
-                  [
-                    "Sistema",
-                    report
-                      ? `${report.os} · ${report.arch}`
-                      : "Aguardando análise",
-                  ],
-                  [
-                    "Memória RAM",
-                    report?.memory_gb
-                      ? `${report.memory_gb.toFixed(1)} GB`
-                      : "Aguardando análise",
-                  ],
-                ].map(([label, value]) => (
-                  <div key={label}>
-                    <span>{label}</span>
-                    <strong>{value}</strong>
-                  </div>
-                ))}
-              </section>
-              {report && <ReportDetails report={report} />}
-              <div className="section-heading">
-                <h2>Prepare seu próximo passo</h2>
-                <span>Do básico à primeira live</span>
-              </div>
-              <section className="feature-grid">
-                {[
-                  {
-                    id: "boost",
-                    icon: Zap,
-                    title: "Um setup mais leve",
-                    desc: "Gere um plano com IA ou preset local e revise os ajustes do Windows antes de aplicar.",
-                    cta: "Abrir Quick Boost",
-                    color: "purple",
-                  },
-                  {
-                    id: "games",
-                    icon: Gamepad2,
-                    title: "Seu jogo, sua prioridade",
-                    desc: "Configurações por jogo, baseadas em hardware e objetivo. Integração em desenvolvimento.",
-                    cta: "Explorar jogos",
-                    color: "green",
-                  },
-                  {
-                    id: "obs",
-                    icon: Radio,
-                    title: "Tudo pronto para transmitir",
-                    desc: "Conecte o OBS e crie um perfil separado para Twitch, Kick, YouTube ou outro servidor RTMP.",
-                    cta: "Abrir Streaming",
-                    color: "pink",
-                  },
-                ].map(({ id, icon: Icon, title, desc, cta, color }) => (
-                  <article key={id} className={color}>
-                    <Icon size={26} />
-                    <h3>{title}</h3>
-                    <p>{desc}</p>
-                    <button className="text-button" onClick={() => go(id)}>
-                      {cta}
-                      <ArrowRight size={16} />
-                    </button>
-                  </article>
-                ))}
-              </section>
-              <section className="principle">
-                <ShieldCheck size={25} />
-                <div>
-                  <h3>A mudança começa com a sua aprovação.</h3>
-                  <p>
-                    Planos revisáveis, ações conhecidas e restauração. Sem
-                    promessas de FPS sem medição.
-                  </p>
-                </div>
-                <button className="secondary" onClick={() => go("history")}>
-                  Ver histórico
-                  <ArrowRight size={15} />
-                </button>
-              </section>
-            </>
+            <OverviewPage
+              report={report}
+              busy={busy}
+              scan={scan}
+              navigate={go}
+            />
           ) : route === "boost" ? (
-            <OptimizePage plan={aiPlan} setPlan={setAiPlan} />
+            <OptimizePage
+              plan={aiPlan}
+              setPlan={setAiPlan}
+              navigate={go}
+              onBusyChange={setTaskBusy}
+            />
           ) : route === "history" ? (
             <>
               <OperationsPage />
@@ -383,21 +354,18 @@ function App() {
           ) : route === "discord" ? (
             <DiscordPage />
           ) : route === "live" ? (
-            <>
-              {" "}
-              <OptimizePage plan={aiPlan} setPlan={setAiPlan} />{" "}
-              <StreamingPage plan={aiPlan} /> <DiscordPage />{" "}
-            </>
+            <LiveSetupPage
+              plan={aiPlan}
+              setPlan={setAiPlan}
+              navigate={go}
+              onBusyChange={setTaskBusy}
+            />
           ) : route === "printing" ? (
             <Suspense fallback={<p role="status">Preparando impressão 3D…</p>}>
               <PrintingPage />
             </Suspense>
           ) : route === "settings" ? (
-            <>
-              <LicensePage />
-              <NotificationSettings />
-              <CredentialsPage />
-            </>
+            <SettingsPage />
           ) : (
             <section className="panel empty">
               <page.icon size={44} />

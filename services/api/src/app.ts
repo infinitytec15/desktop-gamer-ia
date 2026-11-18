@@ -7,7 +7,7 @@ import {
 } from "./integrations.js";
 import { estimate } from "./estimates.js";
 import { MODELS, routingSchema, routingSettings } from "./routing.js";
-import { accountActor, generatePrinting } from "./printing.js";
+import { generatePrinting } from "./printing.js";
 import express, {
   type Request,
   type Response,
@@ -152,6 +152,7 @@ export function createApp(pool: Pool, c: Config) {
       billing_enabled: billingReady(await paymentConfig(pool, c)),
       download_available: !!c.downloadUrl,
       download_url: c.downloadUrl || null,
+      mac_download_url: c.macDownloadUrl || null,
     });
   });
 
@@ -404,31 +405,18 @@ export function createApp(pool: Pool, c: Config) {
     res.json({ ok: true });
   });
 
-  app.post("/api/ai/estimate", async (req, res) => {
-    await rateLimit(
-      pool,
-      c,
-      "ai-quote:" + (req.auth?.userId || "ip:" + req.ip),
-      60,
-      60,
-    );
-    res.json(await estimate(pool, req.body));
+  app.post(["/api/ai/estimate", "/api/account/printing/ai"], (_req, res) => {
+    res
+      .status(410)
+      .json({
+        error:
+          "Use o aplicativo desktop para analisar e configurar. O site gerencia conta, planos, créditos e downloads.",
+      });
   });
   app.post("/api/desktop/ai/estimate", async (req, res) => {
     const { device } = await deviceAuth(pool, c, bearer(req));
     await rateLimit(pool, c, "desktop-quote:" + device.id, 60, 60);
     res.json(await estimate(pool, req.body));
-  });
-  app.post("/api/account/printing/ai", requireUser, async (req, res) => {
-    await rateLimit(pool, c, "printing-ai:" + req.auth!.userId, 10, 60);
-    res.json(
-      await generatePrinting(
-        pool,
-        c,
-        await accountActor(pool, req.auth!.userId!),
-        req.body,
-      ),
-    );
   });
   app.post("/api/desktop/printing/ai", async (req, res) => {
     const { device, license } = await deviceAuth(pool, c, bearer(req));

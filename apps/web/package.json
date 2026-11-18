@@ -1,7 +1,7 @@
 {
   "name": "@gameforge/web",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.6.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 1430",
@@ -16,7 +16,7 @@
     "three": "^0.180.0",
     "gsap": "^3.13.0",
     "@fontsource/inter": "^5.3.0",
-    "@gameforge/printing": "0.5.0"
+    "@gameforge/printing": "0.6.0"
   },
   "devDependencies": {
     "@types/three": "^0.180.0",

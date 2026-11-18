@@ -149,3 +149,18 @@ As verificações adicionais de opt-out legado/restauração de roteamento e rec
 
 
 Configuração solicitada pelo operador aplicada e lida novamente em produção após o deploy 2279dac: somente OpenAI nos três modos (Luna/Terra/Sol), com fallback entre modelos OpenAI quando autorizado e sem fallback no Avançado. Snapshot cifrado de roteamento disponível no admin. Consulta de modelos, sem geração paga adicional, verificou as duas chaves e concluiu recifra dos registros legados; ambos os provedores retornaram stored=true/context_bound=true. Nenhuma chave ou sufixo foi retornado. Novas estimativas dos três modos apontaram apenas modelos gpt-*. A chave Anthropic foi preservada; sua geração continua dependente de saldo na API.
+
+
+## Quick Boost e desktop 0.6 — 18/11/2026
+
+Pedido: Quick Boost intuitivo/completo no catálogo disponível, respostas visuais, telas consistentes e nova visão geral. Plano em plans/quick-boost-06.md. O usuário esclareceu que o site é vitrine/conta/planos/créditos/download e as ferramentas são do aplicativo Windows/macOS.
+
+Implementado: leitura real independente dos quatro ajustes Windows, estados já configurado/disponível/indisponível, perfis por objetivo, seleção manual de mouse/energia, comparação decodificada antes/depois, orçamento IA opcional sem JSON, revisão recuperada do SQLite ao navegar/reabrir, resultado baseado no diário durável inclusive falha/rollback, confirmação de desfazer, filtros e relatório TXT. Snapshot e Ponto de Restauração continuam obrigatórios antes da escrita. Não foram acrescentadas limpezas destrutivas, encerramento de processos ou comandos da IA.
+
+Visão geral: diagnóstico e RAM/espaço medidos quando solicitados, atalhos por tarefa, licença local, atividade recente e aviso de operação pendente. Navegação agrupada/pesquisável, configurações por seção, preparação de live por etapas, Streaming com conexão/destino/revisão, estados vazios e orientação para jogos/rede/programas/solicitações. Impressão mostra dados de consentimento em campos legíveis preservando texto livre. Site deixa de carregar Workbench; rota pública explica recursos e encaminha ao download, rota antiga do usuário orienta a usar o app. Rotas operacionais do navegador retornam 410; endpoints desktop continuam autenticados por dispositivo/licença. Os testes STL/resina foram transferidos para o desktop, mantendo cobertura de geometria e exportação.
+
+Leitura nativa real (somente leitura): Game Mode e captura já configurados; mouse e energia disponíveis para revisão. Nenhuma otimização/instalação/UAC ou impressão/transmissão foi executada neste PC. Testes de execução/reversão usam backend controlado e não homologam UAC/System Restore em todas as máquinas.
+
+Validação: 53 Rust, 5 Vitest, 11 impressão, 24 E2E desktop e 7 E2E web passaram; builds desktop/cloud, Clippy e Tauri passaram. API anterior 23 passou; ampliação para 24 inicialmente apontou uma premissa antiga de rota web (401 em vez de retirada 410), corrigida para testar autenticação da rota desktop; repetição final registrada depois. Detector visual retornou [] antes da extensão da visão geral; inspeção direta das capturas da extensão em 1280x820 e 390px. Revisão independente indisponível por cota da ferramenta; substituída por inspeção local, sem atribuir aprovação a outro agente.
+
+macOS: workflow manual para gerar DMG universal (Intel/Apple Silicon), conferir assinatura ad hoc/arquiteturas/integridade e publicar hash. Pacote só ganha link no site após gerar/verificar. Não há Developer ID/notarização fornecidos, nem homologação física em Mac. Quick Boost Windows e análise paga de ajustes Windows bloqueados na UI/IPC macOS; diagnóstico/monitor/impressão/OBS permanecem conforme suporte.

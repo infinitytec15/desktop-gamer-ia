@@ -1,10 +1,15 @@
 import { spawnSync } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 const thumbprint = (process.env.GF_SIGNING_CERT_THUMBPRINT || "")
   .replace(/\s/g, "")
   .toUpperCase();
+const { version } = JSON.parse(
+  await readFile("apps/desktop/src-tauri/tauri.conf.json", "utf8"),
+);
+if (!/^\d+\.\d+\.\d+$/.test(version))
+  throw new Error("Versão do instalador inválida");
 if (process.platform !== "win32")
   throw new Error("Gere o instalador Windows em uma máquina Windows");
 if (thumbprint && !/^[A-F0-9]{40}$/.test(thumbprint))
@@ -63,7 +68,9 @@ if (thumbprint) {
       "-NoProfile",
       "-NonInteractive",
       "-Command",
-      "$p=Get-ChildItem -LiteralPath 'target/release/bundle/nsis' -Filter '*_0.5.0_x64-setup.exe'; if($p.Count -ne 1){exit 2}; $s=Get-AuthenticodeSignature -LiteralPath $p.FullName; if($s.Status -ne 'Valid' -or $s.SignerCertificate.Thumbprint -ne '" +
+      "$p=Get-ChildItem -LiteralPath 'target/release/bundle/nsis' -Filter '*_" +
+        version +
+        "_x64-setup.exe'; if($p.Count -ne 1){exit 2}; $s=Get-AuthenticodeSignature -LiteralPath $p.FullName; if($s.Status -ne 'Valid' -or $s.SignerCertificate.Thumbprint -ne '" +
         thumbprint +
         "'){exit 3}; Write-Output 'Assinatura Authenticode válida'",
     ],

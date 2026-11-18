@@ -1,3 +1,4 @@
+import { ReviewData } from "./ReviewData.js";
 import { AiControls, useAiQuote, type AiChoice } from "./AiControls.js";
 import { printerCatalog } from "./printers.js";
 import {
@@ -986,22 +987,18 @@ export function PrintWorkbench({
         <div className="print-form">
           <details className="print-details">
             <summary>Revisar dados que serão enviados à IA</summary>
-            <pre>
-              {JSON.stringify(
-                {
-                  brief: (() => {
-                    try {
-                      return makeBrief(draft);
-                    } catch {
-                      return "Preencha e confirme os dados do cenário primeiro";
-                    }
-                  })(),
-                  geometry,
-                },
-                null,
-                2,
-              )}
-            </pre>
+            <ReviewData
+              value={{
+                brief: (() => {
+                  try {
+                    return makeBrief(draft);
+                  } catch {
+                    return "Preencha e confirme os dados do cenário primeiro";
+                  }
+                })(),
+                geometry,
+              }}
+            />
           </details>
           <label className="print-check">
             <input

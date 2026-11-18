@@ -1,0 +1,49 @@
+name: Package macOS beta
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag
+        required: true
+        default: v0.6.0
+permissions:
+  contents: write
+jobs:
+  macos:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    env:
+      APPLE_SIGNING_IDENTITY: '-'
+      RELEASE_TAG: ${{ inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - name: Validate release
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "$RELEASE_TAG" = "v$(node -p 'JSON.parse(require("fs").readFileSync("package.json")).version')"
+          gh release view "$RELEASE_TAG" >/dev/null
+      - run: npm ci
+      - run: cargo test -p gf-core --locked
+      - run: npm run tauri -w @gameforge/desktop -- build --target universal-apple-darwin --bundles dmg
+      - name: Verify and publish beta artifacts
+        run: |
+          app="target/universal-apple-darwin/release/bundle/macos/GameForge AI.app"
+          codesign --verify --deep --strict "$app"
+          lipo -verify_arch arm64 x86_64 "$app/Contents/MacOS/gameforge"
+          dmg=$(find target/universal-apple-darwin/release/bundle/dmg -maxdepth 1 -name '*.dmg' -print -quit)
+          test -n "$dmg"
+          hdiutil verify "$dmg"
+          name="GameForge-AI-${RELEASE_TAG#v}-universal.dmg"
+          cp "$dmg" "$name"
+          shasum -a 256 "$name" > SHA256SUMS-macos.txt
+          gh release upload "$RELEASE_TAG" "$name" SHA256SUMS-macos.txt --clobber

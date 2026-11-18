@@ -126,6 +126,9 @@ async fn preview_ai(
     goal: String,
     state: tauri::State<'_, AiContext>,
 ) -> Result<serde_json::Value, String> {
+    if !cfg!(windows) {
+        return Err("O planejamento de ajustes de sistema desta versão é específico do Windows. Use as ferramentas compatíveis com seu Mac.".into());
+    }
     let context = tauri::async_runtime::spawn_blocking(move || {
         gf_core::ai::context(&gf_core::diagnostics::diagnose(), &goal).map_err(|e| e.to_string())
     })
@@ -140,6 +143,9 @@ async fn generate_plan(
     options: Option<serde_json::Value>,
     state: tauri::State<'_, AiContext>,
 ) -> Result<gf_core::automation::OptimizationPlan, String> {
+    if !cfg!(windows) {
+        return Err("A análise de ajustes Windows não está disponível no macOS. Nenhum crédito foi consumido.".into());
+    }
     let context = state
         .0
         .lock()
@@ -162,12 +168,19 @@ async fn generate_plan(
     .map_err(|e| e.to_string())?
 }
 #[tauri::command]
-fn offline_plan() -> Result<gf_core::automation::OptimizationPlan, String> {
-    let p = gf_core::automation::OptimizationPlan::offline();
+fn offline_plan(goal: Option<String>) -> Result<gf_core::automation::OptimizationPlan, String> {
+    let p = gf_core::automation::OptimizationPlan::offline_for(goal.as_deref())
+        .map_err(|e| e.to_string())?;
     PreferenceStore::new(gf_core::data_dir())
         .record_plan(&p)
         .map_err(|e| e.to_string())?;
     Ok(p)
+}
+#[tauri::command]
+async fn system_checks() -> Result<Vec<gf_core::system::SystemCheck>, String> {
+    tauri::async_runtime::spawn_blocking(gf_core::system::checks)
+        .await
+        .map_err(|e| e.to_string())
 }
 #[tauri::command]
 async fn prepare_system(
@@ -391,6 +404,7 @@ fn main() {
         )))
         .manage(Mutex::new(PreferenceStore::new(gf_core::data_dir())))
         .invoke_handler(tauri::generate_handler![
+            system_checks,
             printing_ai,
             estimate_ai,
             save_print_artifact,

@@ -375,6 +375,12 @@
           "markdownDescription": "Enables the secret_status command without any pre-configured scope."
         },
         {
+          "description": "Enables the system_checks command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-system-checks",
+          "markdownDescription": "Enables the system_checks command without any pre-configured scope."
+        },
+        {
           "description": "Enables the undo_operation command without any pre-configured scope.",
           "type": "string",
           "const": "allow-undo-operation",
@@ -577,6 +583,12 @@
           "type": "string",
           "const": "deny-secret-status",
           "markdownDescription": "Denies the secret_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the system_checks command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-system-checks",
+          "markdownDescription": "Denies the system_checks command without any pre-configured scope."
         },
         {
           "description": "Denies the undo_operation command without any pre-configured scope.",

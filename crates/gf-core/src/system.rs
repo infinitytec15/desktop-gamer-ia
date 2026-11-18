@@ -4,6 +4,122 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use ts_rs::TS;
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../../apps/desktop/src/generated/")]
+pub struct SystemCheck {
+    pub action: SystemAction,
+    pub state: String,
+    pub current: String,
+    pub target: String,
+    pub detail: String,
+}
+
+/// Read-only preflight. Failure of one adapter does not hide other results.
+pub fn checks() -> Vec<SystemCheck> {
+    [
+        SystemAction::EnableGameMode,
+        SystemAction::DisableGameCapture,
+        SystemAction::DisableMouseAcceleration,
+        SystemAction::HighPerformancePower,
+    ]
+    .into_iter()
+    .map(|action| {
+        let expected = desired(std::slice::from_ref(&action));
+        let target = match action {
+            SystemAction::EnableGameMode => "Ativado",
+            SystemAction::DisableGameCapture => "Captura desativada",
+            SystemAction::DisableMouseAcceleration => "Sem aceleração",
+            SystemAction::HighPerformancePower => "Alto desempenho",
+        }
+        .to_string();
+        let result = (|| {
+            native::available(&action)?;
+            read_all(&expected)
+        })();
+        match result {
+            Ok(current) => {
+                let done = current == expected;
+                SystemCheck {
+                    action,
+                    state: if done { "already_set" } else { "ready" }.into(),
+                    current: if done {
+                        target.clone()
+                    } else {
+                        describe(&current)
+                    },
+                    target,
+                    detail: if done {
+                        "Nenhuma alteração necessária."
+                    } else {
+                        "Leitura concluída. O estado será conferido novamente antes de aplicar."
+                    }
+                    .into(),
+                }
+            }
+            Err(error) => SystemCheck {
+                action,
+                state: "unavailable".into(),
+                current: "Não disponível".into(),
+                target,
+                detail: error.to_string(),
+            },
+        }
+    })
+    .collect()
+}
+
+fn describe(values: &BTreeMap<String, Option<StoredValue>>) -> String {
+    values
+        .iter()
+        .map(|(key, value)| {
+            let label = match key.as_str() {
+                "game_mode_auto" => "Modo de Jogo",
+                "game_dvr" => "Game DVR",
+                "capture" => "Captura",
+                "mouse_speed" => "Aceleração",
+                "mouse_threshold1" => "Limiar 1",
+                "mouse_threshold2" => "Limiar 2",
+                "power_plan" => "Energia",
+                _ => "Preferência",
+            };
+            let text = match value {
+                None => "Padrão do Windows".into(),
+                Some(v) if v.kind == 4 && v.bytes.len() == 4 => {
+                    let number =
+                        u32::from_le_bytes([v.bytes[0], v.bytes[1], v.bytes[2], v.bytes[3]]);
+                    match number {
+                        0 => "Desativado".into(),
+                        1 => "Ativado".into(),
+                        n => n.to_string(),
+                    }
+                }
+                Some(v) if v.kind == 1 && v.bytes.len() % 2 == 0 => String::from_utf16_lossy(
+                    &v.bytes
+                        .as_chunks::<2>()
+                        .0
+                        .iter()
+                        .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                        .collect::<Vec<_>>(),
+                )
+                .trim_end_matches('\0')
+                .to_string(),
+                Some(v) if key == "power_plan" => {
+                    match String::from_utf8_lossy(&v.bytes).as_ref() {
+                        "381b4222-f694-41f0-9685-ff5bb260df2e" => "Equilibrado".into(),
+                        "a1841308-3541-4fab-bc81-f71556f20b4a" => "Economia de energia".into(),
+                        "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c" => "Alto desempenho".into(),
+                        _ => "Plano personalizado".into(),
+                    }
+                }
+                Some(_) => "Valor personalizado preservado no snapshot".into(),
+            };
+            format!("{label}: {text}")
+        })
+        .collect::<Vec<_>>()
+        .join(" · ")
+}
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct StoredValue {
     kind: u32,
@@ -70,6 +186,9 @@ fn validate(actions: &[SystemAction]) -> Result<(), Error> {
 }
 pub fn prepare(store: &PreferenceStore, actions: Vec<SystemAction>) -> Result<Operation, Error> {
     validate(&actions)?;
+    for action in &actions {
+        native::available(action)?;
+    }
     let _lock = store.acquire_lock()?;
     if store.operations()?.iter().any(|o| {
         o.kind == "system"
@@ -321,6 +440,9 @@ mod native {
     pub fn read(_: &str) -> Result<Option<StoredValue>, Error> {
         Err(unsupported())
     }
+    pub fn available(_: &SystemAction) -> Result<(), Error> {
+        Err(unsupported())
+    }
     pub fn write(_: &str, _: Option<&StoredValue>) -> Result<(), Error> {
         Err(unsupported())
     }
@@ -351,6 +473,16 @@ mod native {
         },
     };
     use winreg::{enums::*, RegKey, RegValue};
+    pub fn available(action: &SystemAction) -> Result<(), Error> {
+        if *action == SystemAction::HighPerformancePower
+            && !power(&["/list"])?
+                .to_ascii_lowercase()
+                .contains("8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c")
+        {
+            return Err(Error::Invalid("O plano Alto desempenho não está disponível neste computador. Os demais ajustes podem ser revisados separadamente.".into()));
+        }
+        Ok(())
+    }
     fn location(id: &str) -> Result<(&'static str, &'static str), Error> {
         match id {
             "game_mode_auto" => Ok((r"Software\Microsoft\GameBar", "AutoGameModeEnabled")),
@@ -635,6 +767,29 @@ mod native {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn preflight_description_does_not_invent_defaults() {
+        let mut values = BTreeMap::new();
+        values.insert("game_mode_auto".into(), None);
+        assert!(describe(&values).contains("Padrão do Windows"));
+        values.insert(
+            "game_mode_auto".into(),
+            Some(StoredValue {
+                kind: 4,
+                bytes: vec![1, 0, 0, 0],
+            }),
+        );
+        assert_eq!(describe(&values), "Modo de Jogo: Ativado");
+        values.insert(
+            "mouse_speed".into(),
+            Some(StoredValue {
+                kind: 1,
+                bytes: vec![50, 0, 0, 0],
+            }),
+        );
+        assert!(describe(&values).contains("Aceleração: 2"));
+    }
 
     struct Fake {
         values: std::cell::RefCell<BTreeMap<String, Option<StoredValue>>>,

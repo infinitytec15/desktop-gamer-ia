@@ -4,6 +4,7 @@
     "main"
   ],
   "permissions": [
+    "allow-system-checks",
     "core:default",
     "allow-diagnose",
     "allow-apply-preferences",

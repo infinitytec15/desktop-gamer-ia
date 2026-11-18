@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { AppWindow, ArrowRight, ClipboardCheck } from "lucide-react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import type { InstalledApp } from "../generated/InstalledApp";
 import type { Inventory } from "../generated/Inventory";
@@ -25,8 +26,8 @@ export function WelcomePage({
       </p>
       <ol className="guide">
         <li>
-          <strong>Conecte as ferramentas.</strong> Ative sua licença na sua conta e
-          conecte o OBS. Você também pode começar offline.
+          <strong>Conecte as ferramentas.</strong> Ative sua licença na sua
+          conta e conecte o OBS. Você também pode começar offline.
         </li>
         <li>
           <strong>Conheça o computador.</strong> Faça um diagnóstico ou escolha
@@ -152,6 +153,22 @@ export function ProgramsPage({
           {error}
         </p>
       )}
+      {!data && !busy && (
+        <div className="useful-empty">
+          <AppWindow size={28} />
+          <h3>Encontre o programa que quer configurar</h3>
+          <p>
+            Leia o inventário, pesquise pelo nome e escolha Configurar. Você
+            define o objetivo antes de qualquer proposta de mudança.
+          </p>
+        </div>
+      )}
+      {data?.apps.length === 0 && (
+        <p className="message">
+          Nenhum programa foi encontrado nas fontes consultadas. Softwares
+          portáteis e instalações não registradas podem não aparecer.
+        </p>
+      )}
       {data?.warnings.map((w) => (
         <p className="muted" key={w}>
           {w}
@@ -183,7 +200,10 @@ export function ProgramsPage({
                 <button
                   className="secondary"
                   onClick={() => {
-                    if(a.adapter==="printing"){location.hash="printing";return;}
+                    if (a.adapter === "printing") {
+                      location.hash = "printing";
+                      return;
+                    }
                     setApp(a);
                     setCreated(null);
                   }}
@@ -329,10 +349,15 @@ export function RequestsPage() {
   const [ops, setOps] = useState<Operation[]>([]),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
-    [links, setLinks] = useState<Record<string, string>>({});
+    [links, setLinks] = useState<Record<string, string>>({}),
+    [loaded, setLoaded] = useState(false);
   async function refresh() {
     setOps(await invoke<Operation[]>("operation_history"));
+    setLoaded(true);
   }
+  useEffect(() => {
+    if (isTauri()) void run(refresh);
+  }, []);
   async function run(fn: () => Promise<void>) {
     if (!isTauri()) {
       setError("Abra o aplicativo desktop para consultar solicitações.");
@@ -385,6 +410,19 @@ export function RequestsPage() {
         <p className="message error" role="alert">
           {error}
         </p>
+      )}
+      {!busy && (!loaded || !ops.some((o) => o.kind === "workflow")) && (
+        <div className="useful-empty">
+          <ClipboardCheck size={28} />
+          <h3>Seu objetivo vira uma solicitação</h3>
+          <p>
+            Comece em Programas, escolha um software e registre o que quer
+            alcançar. Aqui você acompanha o plano e confirma o resultado.
+          </p>
+          <a className="text-button" href="#programs">
+            Escolher um programa <ArrowRight size={15} />
+          </a>
+        </div>
       )}
       {ops
         .filter((o) => o.kind === "workflow")

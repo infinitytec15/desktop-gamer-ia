@@ -285,7 +285,6 @@ function Auth({ path, sync }: { path: string; sync: () => Promise<void> }) {
 }
 const userNav = [
   ["", "Visão geral", LayoutDashboard],
-  ["impressao-3d", "Impressão 3D", Printer],
   ["planos", "Planos", Sparkles],
   ["assinatura", "Assinatura", CreditCard],
   ["chaves", "Chaves e dispositivos", KeyRound],
@@ -676,9 +675,18 @@ function UserContent(c: Context & { data: Row }) {
   const balance = data.credits.balance;
   if (page === "impressao-3d")
     return (
-      <Suspense fallback={<Loading />}>
-        <Printing />
-      </Suspense>
+      <Section
+        title="Impressão 3D no aplicativo desktop"
+        description="A análise de STL e a preparação de perfis acontecem no seu computador."
+      >
+        <p>
+          Use o site para gerenciar sua conta e baixar o aplicativo. Abra
+          Impressão 3D no GameForge para analisar sua peça.
+        </p>
+        <Link to="/app/download" className="button primary">
+          Baixar aplicativo <Download size={18} />
+        </Link>
+      </Section>
     );
   if (page === "planos")
     return (
@@ -717,7 +725,7 @@ function UserContent(c: Context & { data: Row }) {
     return (
       <Section
         title="Instale. Ative. Prepare seu setup."
-        description="Aplicativo nativo para Windows 10/11 x64."
+        description="Baixe o aplicativo para usar as ferramentas no seu computador."
       >
         <div className="download-content">
           <div className="download-visual">
@@ -759,6 +767,30 @@ function UserContent(c: Context & { data: Row }) {
                 O instalador desta versão ainda não foi publicado pelo operador.
               </p>
             )}
+            <div className="mac-download">
+              <h3>GameForge AI para macOS</h3>
+              <p className="fine muted">
+                macOS 13 ou superior, Apple Silicon e Intel. Diagnóstico,
+                monitor, impressão 3D e OBS conforme suporte. Os ajustes do
+                Windows não são aplicados no Mac. Beta com assinatura ad hoc,
+                sem notarização Apple; a abertura pode exigir autorização em
+                Privacidade e Segurança.
+              </p>
+              {catalog?.mac_download_url ? (
+                <a
+                  className="button secondary"
+                  href={catalog.mac_download_url}
+                  download
+                >
+                  Baixar para Mac <Download size={18} />
+                </a>
+              ) : (
+                <p className="fine muted">
+                  Pacote macOS em preparação. O download será liberado após a
+                  geração e verificação.
+                </p>
+              )}
+            </div>
             <p className="fine muted">
               Diagnóstico e restauração são locais. A IA exige conexão.
               Temperaturas dependem dos sensores disponíveis.

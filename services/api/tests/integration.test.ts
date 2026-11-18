@@ -82,6 +82,17 @@ async function post(path: string, body: unknown, cookie?: string) {
   });
 }
 integration(
+  "browser tools are retired and desktop tools require a device token",
+  async () => {
+    for (const path of ["/ai/estimate", "/account/printing/ai"]) {
+      const response = await post(path, {});
+      assert.equal(response.status, 410);
+    }
+    const response = await post("/desktop/ai/estimate", {});
+    assert.equal(response.status, 401);
+  },
+);
+integration(
   "auth rejects cross-origin mutation and user cannot reach admin",
   async () => {
     let response = await realFetch(origin + "/api/auth/register", {
@@ -631,7 +642,7 @@ integration(
         /não entregou/,
       );
       assert.equal((await wallet(pool, "user:" + u.id)).balance, 452);
-      const denied = await post("/account/printing/ai", input);
+      const denied = await post("/desktop/printing/ai", input);
       assert.equal(denied.status, 401);
     } finally {
       globalThis.fetch = realFetch;

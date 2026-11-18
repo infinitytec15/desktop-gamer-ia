@@ -4,6 +4,7 @@ import { RefreshCw, ShieldCheck, Undo2 } from "lucide-react";
 import type { Game } from "../generated/Game";
 import type { Probe } from "../generated/Probe";
 import type { Report, Snapshot } from "../domain";
+import { ArrowRight, Gamepad2, Wifi } from "lucide-react";
 function useRequest<T>(command: string) {
   const [data, setData] = useState<T | null>(null),
     [error, setError] = useState(""),
@@ -59,6 +60,7 @@ function Refresh({
 }
 export function GamesPage() {
   const q = useRequest<Game[]>("detect_games");
+  const [query, setQuery] = useState("");
   return (
     <section className="panel">
       <h2>Biblioteca de jogos</h2>
@@ -71,6 +73,27 @@ export function GamesPage() {
         label="Detectar jogos"
       />
       <ErrorMessage text={q.error} />
+      {!q.data && !q.loading && (
+        <div className="useful-empty">
+          <Gamepad2 size={28} />
+          <h3>Encontre sua biblioteca</h3>
+          <p>
+            Clique em Detectar jogos para ler as instalações Steam e Epic deste
+            computador. Seus arquivos permanecem intactos.
+          </p>
+        </div>
+      )}
+      {q.data && q.data.length > 0 && (
+        <label className="field">
+          Pesquisar em {q.data.length} jogos
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Nome do jogo…"
+          />
+        </label>
+      )}
       {q.data?.length === 0 && (
         <p>
           Nenhum jogo foi localizado nas bibliotecas padrão. Instalações
@@ -78,20 +101,26 @@ export function GamesPage() {
         </p>
       )}
       <div className="data-list">
-        {q.data?.map((g) => (
-          <div className="data-row" key={g.id}>
-            <div>
-              <strong>{g.name}</strong>
-              <small>
-                {g.store} ·{" "}
-                {g.installed
-                  ? "Pasta instalada encontrada"
-                  : "Instalação não confirmada"}
-              </small>
+        {q.data
+          ?.filter((g) =>
+            g.name
+              .toLocaleLowerCase("pt-BR")
+              .includes(query.toLocaleLowerCase("pt-BR")),
+          )
+          .map((g) => (
+            <div className="data-row" key={g.id}>
+              <div>
+                <strong>{g.name}</strong>
+                <small>
+                  {g.store} ·{" "}
+                  {g.installed
+                    ? "Pasta instalada encontrada"
+                    : "Instalação não confirmada"}
+                </small>
+              </div>
+              <span className="tag">Somente leitura</span>
             </div>
-            <span className="tag">Somente leitura</span>
-          </div>
-        ))}
+          ))}
       </div>
       <p className="muted">
         Otimização depende de skills verificadas por versão do jogo. Detectar um
@@ -115,15 +144,30 @@ export function NetworkPage() {
         label="Testar conectividade"
       />
       <ErrorMessage text={q.error} />
-      <div className="data-list">
+      {!q.data && !q.loading && (
+        <div className="useful-empty">
+          <Wifi size={28} />
+          <h3>Confira sua conexão</h3>
+          <p>
+            O teste consulta três destinos pela porta HTTPS e mostra o tempo
+            para estabelecer cada conexão. Nenhuma configuração será alterada.
+          </p>
+        </div>
+      )}
+      <div className="network-results">
         {q.data?.map((p) => (
-          <div className="data-row" key={p.name}>
-            <strong>{p.name}</strong>
-            <span>
+          <div key={p.name}>
+            <h3>{p.name}</h3>
+            <strong>
               {p.connected
                 ? `${p.connect_ms?.toFixed(1)} ms`
                 : "Conexão não estabelecida"}
-            </span>
+            </strong>
+            <small>
+              {p.connected
+                ? "Conexão HTTPS estabelecida"
+                : "Destino não respondeu ao teste"}
+            </small>
           </div>
         ))}
       </div>
@@ -214,6 +258,14 @@ export function DiscordPage() {
       <p role="status">
         {done.length} de {discordSteps.length} etapas confirmadas por você.
       </p>
+      <div className="guide-check">
+        <progress
+          value={done.length}
+          max={discordSteps.length}
+          aria-label="Etapas de voz confirmadas"
+        />
+        <span>Conferência manual no Discord</span>
+      </div>
       <p className="muted">
         O GameForge não lê suas mensagens ou opera sua conta. O cliente e os
         servidores não são modificados por este checklist.
@@ -262,9 +314,24 @@ export function HistoryPage() {
             </div>
             <details>
               <summary>Ver alterações</summary>
-              <pre>
-                {JSON.stringify({ antes: s.before, depois: s.after }, null, 2)}
-              </pre>
+              <dl className="readable-data">
+                {Object.keys(s.after).map((key) => (
+                  <div key={key}>
+                    <dt>
+                      {{
+                        offline_first: "Priorizar uso offline",
+                        reduced_motion: "Reduzir movimento",
+                        notifications: "Notificações",
+                      }[key] || "Preferência do aplicativo"}
+                    </dt>
+                    <dd>
+                      {s.before[key] ? "Ativada" : "Desativada"}{" "}
+                      <ArrowRight size={13} />{" "}
+                      {s.after[key] ? "Ativada" : "Desativada"}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
             </details>
             <button
               className="secondary"

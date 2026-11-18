@@ -57,6 +57,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     billingEnabled: env.BILLING_ENABLED === "true",
     mpCancelStatus: env.MP_CANCEL_STATUS || "cancelled",
     downloadUrl: env.DESKTOP_DOWNLOAD_URL || "",
+    macDownloadUrl: env.DESKTOP_MAC_DOWNLOAD_URL || "",
     workerEnabled: env.WORKER_ENABLED !== "false",
   };
 }

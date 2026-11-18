@@ -51,6 +51,24 @@ impl OptimizationPlan {
     pub fn offline() -> Self {
         Self{summary:"Preset local conservador: Game Mode, captura Game DVR desativada e OBS 720p30. Revise as trocas antes de aplicar.".into(),system_actions:vec![SystemAction::EnableGameMode,SystemAction::DisableGameCapture],video:StreamVideo{width:1280,height:720,fps:30,bitrate:3500},provider:"offline".into(),model:"preset-local-v1".into(),warnings:vec!["Nenhum ganho de FPS é garantido. O OBS usará x264/veryfast; confira o uso de CPU antes de transmitir.".into()]}
     }
+    pub fn offline_for(goal: Option<&str>) -> Result<Self, Error> {
+        let mut plan = Self::offline();
+        match goal {
+            None | Some("Jogar e transmitir com estabilidade") => {}
+            Some("Priorizar jogo competitivo") => {
+                plan.summary = "Plano local para jogo competitivo: revise Modo de Jogo e captura. A resposta do mouse é uma opção manual; energia permanece à sua escolha.".into();
+                plan.system_actions
+                    .push(SystemAction::DisableMouseAcceleration);
+            }
+            Some("Equilibrar desempenho e consumo") => {
+                plan.summary = "Plano local equilibrado: habilitar Modo de Jogo, preservando captura, mouse e energia por padrão. Outros ajustes são opcionais e exigem seleção.".into();
+                plan.system_actions = vec![SystemAction::EnableGameMode];
+            }
+            Some(_) => return Err(Error::Invalid("Objetivo local não reconhecido".into())),
+        }
+        plan.validate()?;
+        Ok(plan)
+    }
 }
 impl StreamVideo {
     pub fn validate(&self) -> Result<(), Error> {
@@ -133,5 +151,26 @@ mod tests {
     #[test]
     fn refuses_unknown_action() {
         assert!(serde_json::from_str::<SystemAction>("\"disable_antivirus\"").is_err());
+    }
+    #[test]
+    fn local_goals_preserve_energy_and_require_explicit_optional_selection() {
+        let balanced = OptimizationPlan::offline_for(Some("Equilibrar desempenho e consumo"))
+            .expect("balanced");
+        assert_eq!(balanced.system_actions, vec![SystemAction::EnableGameMode]);
+        let competitive =
+            OptimizationPlan::offline_for(Some("Priorizar jogo competitivo")).expect("competitive");
+        assert!(competitive
+            .system_actions
+            .contains(&SystemAction::DisableMouseAcceleration));
+        assert!(!competitive
+            .system_actions
+            .contains(&SystemAction::HighPerformancePower));
+        assert_eq!(
+            OptimizationPlan::offline_for(None)
+                .expect("legacy")
+                .system_actions,
+            OptimizationPlan::offline().system_actions
+        );
+        assert!(OptimizationPlan::offline_for(Some("run_shell")).is_err());
     }
 }

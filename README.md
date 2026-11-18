@@ -29,7 +29,7 @@ npm run desktop           # desenvolvimento nativo
 npm run dev               # prévia da UI, sem acesso real ao PC
 ```
 
-Instalador: `target/release/bundle/nsis/GameForge AI_0.5.0_x64-setup.exe`. Inclui logo, apresentação, atalho e guia inicial. Depois de instalar, vá em **Configurações → Licença**, cole sua chave e conecte o OBS. Não precisa de chaves de API no desktop.
+Instalador: `target/release/bundle/nsis/GameForge AI_0.6.0_x64-setup.exe`. Inclui logo, apresentação, atalho e guia inicial. Depois de instalar, vá em **Configurações → Licença**, cole sua chave e conecte o OBS. Não precisa de chaves de API no desktop.
 
 O app coleta CPU/RAM/discos/processos/sensores disponíveis, detecta instalações registradas e jogos Steam/Epic, testa conectividade TCP e registra objetivos/aceites. A IA recebe somente o contexto revisado e propõe ações de um catálogo fechado. Quatro ações Windows: Game Mode, captura Game DVR, aceleração do mouse e energia Alto desempenho. Sistema exige revisão, elevação e restauração disponível. OBS usa WebSocket v5, autenticação, perfil separado, x264/veryfast/CBR e uma plataforma RTMP/RTMPS por perfil. Restauração permanece gratuita e local.
 

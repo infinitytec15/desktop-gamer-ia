@@ -90,6 +90,9 @@ test("diagnostic report renders fixture with missing sensors honestly", async ({
   });
   await page.goto("/");
   await page.getByRole("button", { name: "Analisar computador" }).click();
+  await page
+    .getByText("Consultar diagnóstico completo e processos", { exact: true })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Dados coletados" }),
   ).toBeVisible();
@@ -116,6 +119,20 @@ test("offline review requires a separate approval before system apply", async ({
     Object.defineProperty(window, "__TAURI_INTERNALS__", {
       value: {
         invoke: async (cmd: string, args: Record<string, unknown>) => {
+          if (cmd === "operation_history") return [];
+          if (cmd === "system_checks")
+            return [
+              "enable_game_mode",
+              "disable_game_capture",
+              "disable_mouse_acceleration",
+              "high_performance_power",
+            ].map((action) => ({
+              action,
+              state: "ready",
+              current: "Fixture",
+              target: "Fixture",
+              detail: "Teste controlado",
+            }));
           if (cmd === "offline_plan") return plan;
           if (cmd === "prepare_system") {
             if (
@@ -158,9 +175,9 @@ test("offline review requires a separate approval before system apply", async ({
   await page
     .getByRole("button", { name: "Aprovar e aplicar no Windows (UAC)" })
     .click();
-  await expect(page.getByRole("status")).toContainText(
-    "Ajustes aplicados e verificados",
-  );
+  await expect(
+    page.getByRole("region", { name: "Resultado da operação" }),
+  ).toContainText("Aplicado e verificado");
 });
 test("streaming targets have separate credentials and require review", async ({
   page,

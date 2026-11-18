@@ -22,6 +22,7 @@ export default defineRailway(() => {
         "DATABASE_URL",
         "DB_POOL_MAX",
         "DESKTOP_DOWNLOAD_URL",
+        "DESKTOP_MAC_DOWNLOAD_URL",
         "LICENSE_PEPPER",
         "LICENSE_PRIVATE_KEY",
         "MP_ACCESS_TOKEN",

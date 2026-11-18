@@ -1,7 +1,7 @@
 {
   "name": "@gameforge/api",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.6.0",
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
@@ -16,7 +16,7 @@
     "pg": "^8.16.0",
     "zod": "^4.0.0",
     "helmet": "^8.1.0",
-    "@gameforge/printing": "0.5.0"
+    "@gameforge/printing": "0.6.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",

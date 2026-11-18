@@ -1,6 +1,6 @@
 # Atualização 0.5 — UAC, roteamento e monitor
 
-A versão atual é `target/release/bundle/nsis/GameForge AI_0.5.0_x64-setup.exe`, compilada com domínio e chave pública em `config/desktop-cloud.json`. Gere com `npm run installer`. A IA passa pelo serviço Cloud; ative a chave em Configurações → Licença. Veja [Railway e distribuição](CLOUD-RAILWAY.md). O módulo Impressão 3D analisa STL localmente e prepara planos/perfis para revisão. Consulte [compatibilidade e uso](IMPRESSAO-3D.md). A instalação 0.5 é por máquina e solicita UAC. Sem certificado, o aviso SmartScreen pode permanecer. Veja [segurança e assinatura](SEGURANCA-E-OPERACAO.md). O texto 0.2 abaixo é histórico da beta BYOK.
+A versão atual é `target/release/bundle/nsis/GameForge AI_0.6.0_x64-setup.exe`, compilada com domínio e chave pública em `config/desktop-cloud.json`. Gere com `npm run installer`. A IA passa pelo serviço Cloud; ative a chave em Configurações → Licença. Veja [Railway e distribuição](CLOUD-RAILWAY.md). O módulo Impressão 3D analisa STL localmente e prepara planos/perfis para revisão. Consulte [compatibilidade e uso](IMPRESSAO-3D.md). A instalação 0.6 é por máquina e solicita UAC. Sem certificado, o aviso SmartScreen pode permanecer. Veja [segurança e assinatura](SEGURANCA-E-OPERACAO.md). O texto 0.2 abaixo é histórico da beta BYOK.
 
 # Instalação Windows — GameForge AI beta
 
@@ -24,3 +24,10 @@ npm run installer
 ```
 
 Não apagar os dados do aplicativo ao testar desinstalação caso existam snapshots que ainda precisem ser restaurados. O desinstalador padrão permite manter os dados; o usuário decide sobre a remoção.
+
+
+## Desktop 0.6 e macOS
+
+O site é vitrine e gestão de conta, planos, créditos, chaves e downloads. Execute diagnóstico, Quick Boost, impressão 3D e integração OBS pelo aplicativo. A rota pública de impressão descreve recursos e não analisa arquivos.
+
+O workflow Package macOS beta gera um DMG universal para macOS 13+, Intel e Apple Silicon, com assinatura ad hoc. Não equivale a Developer ID/notarização: o macOS pode exigir autorização em Privacidade e Segurança. DESKTOP_MAC_DOWNLOAD_URL só deve apontar para um artefato gerado/verificado. Os quatro ajustes Quick Boost são exclusivos de Windows. Sensores e integrações têm cobertura específica por plataforma; build/teste CI não é homologação física de todos os recursos.
